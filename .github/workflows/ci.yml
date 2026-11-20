@@ -61,9 +61,100 @@ jobs:
         # runs these steps with `set -o pipefail`, which turns that into a
         # failed step even when the filter is present.
         run: |
-          ffmpeg -hide_banner -version | head -n 1
+          version="$(ffmpeg -hide_banner -version)"
+          printf '%s\n' "${version%%
+
+      - name: Create the environment
+        run: uv venv --python ${{ matrix.python }}
+
+      - name: Install
+        run: uv pip install -e ".[dev]"
+
+      - name: Check that every extra resolves
+        # Catches an unsatisfiable extra without paying to download it. The
+        # diarization extra shipped broken once because of a numpy upper bound.
+        run: |
+          uv pip install --dry-run -e ".[diarization]"
+          uv pip install --dry-run -e ".[gpu]"
+
+      # `uv run --no-sync` runs each tool from the venv built above without
+      # re-resolving the project. Plain `uv run` would sync every optional
+      # extra (pulling PyTorch into a lint job), and putting .venv on PATH by
+      # hand doesn't survive the shell change on Windows, where bash writes a
+      # /d/a/... style path that later PowerShell steps can't use.
+      - name: Lint
+        run: |
+          uv run --no-sync ruff check .
+          uv run --no-sync ruff format --check .
+
+      - name: Type check
+        run: uv run --no-sync mypy backend/autoclip
+        continue-on-error: true
+
+      - name: Unit tests
+        run: uv run --no-sync pytest -m "not slow and not golden and not e2e" -q
+
+      - name: Render tests
+        # The real ffmpeg render path — the one that catches escaping, font, and
+        # encoder problems that unit tests structurally cannot.
+        run: uv run --no-sync pytest -m "slow and not golden and not e2e" -q
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+
+      - name: Type check and build
+        working-directory: frontend
+        run: npm run build
+
+  docker:
+    name: Docker image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          target: base
+          push: false
+          load: true
+          tags: autoclip:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke test
+        run: |
+          docker run -d --name autoclip -p 8000:8000 autoclip:ci
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:8000/api/health; then
+              echo "\nHealthy."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::Container never became healthy."
+          docker logs autoclip
+          exit 1
+\n'*}"
           filters="$(ffmpeg -hide_banner -filters 2>/dev/null || true)"
-          if printf '%s\n' "$filters" | grep -qE '[[:space:]]ass[[:space:]]'; then
+          if [[ "$filters" =~ [[:space:]]ass[[:space:]] ]]; then
             echo "ass filter present"
           else
             echo "::error::This ffmpeg has no 'ass' filter; captions cannot be burned in."
