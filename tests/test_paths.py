@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -190,7 +191,10 @@ def test_library_cache_environment_respects_existing_values(
     )
     for variable in cache_variables:
         monkeypatch.delenv(variable, raising=False)
+    tempfile.tempdir = str(tmp_path / "stale-temp")
     paths.configure_cache_environment()
+    assert tempfile.tempdir is None
+    assert temporary.is_dir()
     assert os.environ["HF_HOME"] == str(cache / "hf-explicit")
     assert os.environ["HF_HUB_CACHE"] == str(temporary / "cache" / "huggingface" / "hub")
     assert os.environ["HUGGINGFACE_HUB_CACHE"] == str(temporary / "cache" / "huggingface" / "hub")
