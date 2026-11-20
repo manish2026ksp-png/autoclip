@@ -466,9 +466,7 @@ class TestStorage:
     ) -> None:
         destination = tmp_path / "existing"
         destination.mkdir()
-        response = client.post(
-            "/api/system/storage/validate", json={"path": str(destination)}
-        )
+        response = client.post("/api/system/storage/validate", json={"path": str(destination)})
 
         assert response.status_code == 200
         assert response.json()["directory_created"] is False
