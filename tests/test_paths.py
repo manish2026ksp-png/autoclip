@@ -197,4 +197,3 @@ def test_library_cache_environment_respects_existing_values(
     assert os.environ["TORCH_HOME"] == str(temporary / "cache" / "torch")
     assert os.environ["XDG_CACHE_HOME"] == str(temporary / "cache")
     assert os.environ["TMP"] == str(temporary)
-"
