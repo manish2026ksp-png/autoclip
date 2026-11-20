@@ -32,7 +32,7 @@ export function Settings() {
     setFaceModelBusy(true)
     setError(null)
     try {
-      await api.fetchModels()
+      await api.downloadModel('face_landmarker')
       setModelMessage('Face tracking model downloaded and cached locally.')
     } catch (err) {
       setError(err as Error)
