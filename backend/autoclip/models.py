@@ -1,9 +1,7 @@
-"""On-demand download and caching of ML model bundles.
+"""Explicit download and local caching of ML model bundles.
 
-MediaPipe's task bundles are a few megabytes each. Fetching them on first use
-into ``~/.autoclip/models/`` keeps them out of the repository and out of the
-wheel, which is the same thing Whisper does with its weights — users expect it,
-and it keeps ``pip install autoclip`` small.
+Model files live outside the repository. Inference must only use files already
+installed by an explicit user action; this module never downloads implicitly.
 """
 
 from __future__ import annotations
@@ -68,7 +66,7 @@ def is_available(key: str) -> bool:
 
 def ensure(key: str) -> Path:
     """Return an installed model path; never access the network implicitly."""
-    spec = _spec(key)
+    _spec(key)  # Validate the model key before checking its installed state.
     destination = model_path(key)
     if destination.exists() and destination.stat().st_size > 0:
         return destination
