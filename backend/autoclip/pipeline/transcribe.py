@@ -100,6 +100,7 @@ def transcribe(
 
     # Must happen before faster-whisper pulls in CTranslate2, which resolves its
     # CUDA dependencies at import.
+    from .. import models
     from ..cuda import ensure_cuda_libraries
 
     ensure_cuda_libraries()
@@ -120,7 +121,14 @@ def transcribe(
     )
 
     try:
-        model = WhisperModel(settings.model, device=device, compute_type=compute_type)
+        cache_root = models.whisper_models_dir()
+        model = WhisperModel(
+            settings.model,
+            device=device,
+            compute_type=compute_type,
+            download_root=str(cache_root),
+            local_files_only=True,
+        )
     except Exception as exc:
         raise _model_load_error(exc, device, compute_type) from exc
 
