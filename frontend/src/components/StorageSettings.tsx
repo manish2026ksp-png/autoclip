@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 
 import { api, formatBytes, type StorageStatus, type StorageValidation } from '../api'
-import { ErrorNote } from '../components/ErrorNote'
+import { ErrorNote } from './ErrorNote'
 
 export function StorageSettings() {
   const [status, setStatus] = useState<StorageStatus | null>(null)
