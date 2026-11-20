@@ -157,6 +157,6 @@ async def fetch_models() -> None:
     for key in models.MODELS:
         if not models.is_available(key):
             try:
-                await asyncio.to_thread(models.ensure, key)
+                await asyncio.to_thread(models.download, key)
             except models.ModelDownloadError as exc:
                 raise HTTPException(status_code=502, detail=str(exc)) from exc
