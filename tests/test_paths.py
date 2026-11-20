@@ -134,23 +134,23 @@ def test_per_job_and_per_source_directories_are_namespaced(autoclip_home: Path) 
 
 def test_independent_storage_overrides(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     overrides = {
-        paths.ENV_MEDIA: tmp_path / 'videos',
-        paths.ENV_WORK: tmp_path / 'processing',
-        paths.ENV_EXPORTS: tmp_path / 'finished',
-        paths.ENV_MODELS: tmp_path / 'weights',
-        paths.ENV_TEMP: tmp_path / 'scratch',
+        paths.ENV_MEDIA: tmp_path / "videos",
+        paths.ENV_WORK: tmp_path / "processing",
+        paths.ENV_EXPORTS: tmp_path / "finished",
+        paths.ENV_MODELS: tmp_path / "weights",
+        paths.ENV_TEMP: tmp_path / "scratch",
     }
     for variable, location in overrides.items():
         monkeypatch.setenv(variable, str(location))
-    assert paths.media_dir() == (tmp_path / 'videos').resolve()
-    assert paths.work_dir() == (tmp_path / 'processing').resolve()
-    assert paths.exports_dir() == (tmp_path / 'finished').resolve()
-    assert paths.models_dir() == (tmp_path / 'weights').resolve()
-    assert paths.temp_dir() == (tmp_path / 'scratch').resolve()
+    assert paths.media_dir() == (tmp_path / "videos").resolve()
+    assert paths.work_dir() == (tmp_path / "processing").resolve()
+    assert paths.exports_dir() == (tmp_path / "finished").resolve()
+    assert paths.models_dir() == (tmp_path / "weights").resolve()
+    assert paths.temp_dir() == (tmp_path / "scratch").resolve()
 
 
 def test_relative_storage_override_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv(paths.ENV_MEDIA, 'relative/videos')
+    monkeypatch.setenv(paths.ENV_MEDIA, "relative/videos")
     with pytest.raises(ValueError, match=paths.ENV_MEDIA):
         paths.media_dir()
 
@@ -158,9 +158,13 @@ def test_relative_storage_override_is_rejected(monkeypatch: pytest.MonkeyPatch) 
 def test_configured_layout_creates_all_storage_roots(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    locations = [tmp_path / name for name in ('media', 'work', 'exports', 'models', 'temp')]
+    locations = [tmp_path / name for name in ("media", "work", "exports", "models", "temp")]
     variables = [
-        paths.ENV_MEDIA, paths.ENV_WORK, paths.ENV_EXPORTS, paths.ENV_MODELS, paths.ENV_TEMP
+        paths.ENV_MEDIA,
+        paths.ENV_WORK,
+        paths.ENV_EXPORTS,
+        paths.ENV_MODELS,
+        paths.ENV_TEMP,
     ]
     for variable, location in zip(variables, locations, strict=True):
         monkeypatch.setenv(variable, str(location))
@@ -171,20 +175,20 @@ def test_configured_layout_creates_all_storage_roots(
 def test_library_cache_environment_respects_existing_values(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    cache = tmp_path / 'custom-cache'
-    temporary = tmp_path / 'custom-temp'
+    cache = tmp_path / "custom-cache"
+    temporary = tmp_path / "custom-temp"
     monkeypatch.setenv(paths.ENV_TEMP, str(temporary))
-    monkeypatch.setenv('HF_HOME', str(cache / 'hf-explicit'))
+    monkeypatch.setenv("HF_HOME", str(cache / "hf-explicit"))
     cache_variables = (
-        'HF_HUB_CACHE', 'HUGGINGFACE_HUB_CACHE', 'TORCH_HOME',
-        'XDG_CACHE_HOME', 'TMP', 'TEMP', 'TMPDIR',
+        "HF_HUB_CACHE", "HUGGINGFACE_HUB_CACHE", "TORCH_HOME",
+        "XDG_CACHE_HOME", "TMP", "TEMP", "TMPDIR",
     )
     for variable in cache_variables:
         monkeypatch.delenv(variable, raising=False)
     paths.configure_cache_environment()
-    assert os.environ['HF_HOME'] == str(cache / 'hf-explicit')
-    assert os.environ['HF_HUB_CACHE'] == str(temporary / 'cache' / 'huggingface' / 'hub')
-    assert os.environ['HUGGINGFACE_HUB_CACHE'] == str(temporary / 'cache' / 'huggingface' / 'hub')
-    assert os.environ['TORCH_HOME'] == str(temporary / 'cache' / 'torch')
-    assert os.environ['XDG_CACHE_HOME'] == str(temporary / 'cache')
-    assert os.environ['TMP'] == str(temporary)
+    assert os.environ["HF_HOME"] == str(cache / "hf-explicit")
+    assert os.environ["HF_HUB_CACHE"] == str(temporary / 'cache' / 'huggingface' / 'hub')
+    assert os.environ["HUGGINGFACE_HUB_CACHE"] == str(temporary / 'cache' / 'huggingface' / 'hub')
+    assert os.environ["TORCH_HOME"] == str(temporary / 'cache' / 'torch')
+    assert os.environ["XDG_CACHE_HOME"] == str(temporary / 'cache')
+    assert os.environ["TMP"] == str(temporary)
