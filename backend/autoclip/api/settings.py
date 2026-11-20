@@ -156,8 +156,8 @@ async def download_whisper_model(model_name: str) -> None:
     """Explicitly download one selected Whisper model; never called by a job."""
     allowed = {"tiny", "base", "small", "medium", "large-v3"}
     if model_name not in allowed:
+        available = ", ".join(sorted(allowed))
         raise HTTPException(
-            available = ", ".join(sorted(allowed))
             status_code=400,
             detail=f"Unsupported Whisper model. Choose: {available}",
         )
