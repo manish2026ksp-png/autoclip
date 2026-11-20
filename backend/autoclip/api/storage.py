@@ -61,6 +61,7 @@ async def validate_storage_path(payload: StoragePathIn) -> dict:
     candidate = Path(payload.path).expanduser()
     if not candidate.is_absolute():
         raise HTTPException(status_code=400, detail="Path must be absolute.")
+    existed = candidate.exists()
     try:
         candidate.mkdir(parents=True, exist_ok=True)
         if not candidate.is_dir():
@@ -80,5 +81,5 @@ async def validate_storage_path(payload: StoragePathIn) -> dict:
         "valid": True,
         "path": str(candidate.resolve()),
         "free_bytes": usage.free,
-        "directory_created": True,
+        "directory_created": not existed,
     }
