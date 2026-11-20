@@ -56,6 +56,20 @@ Each root should support an environment override first. Persisted UI settings ca
 5. Add explicit, staged migration with a dry-run estimate, no overwrite, verification, rollback, and a requirement that no jobs are active.
 6. Test Windows paths, spaces, Unicode, removable drives, unavailable drives, low disk, interrupted migration, and existing legacy installs.
 
-## Not yet implemented
+## Implemented in the product-foundation branch
 
-This document is an audit and design contract, not a claim that independent storage paths, cache redirection, migration, or disk-space warnings already exist.
+- Independent environment overrides now exist for media, work, exports, models and temporary storage.
+- Existing installs retain the same default directory layout and legacy `.clipforge` adoption.
+- Relative override paths are rejected; overrides must be absolute paths.
+- Common Hugging Face, Torch, XDG and Python temporary-directory settings are configured during package initialization, before application modules import inference libraries. Existing explicit cache environment variables are respected.
+- Model storage and Whisper's dedicated cache now resolve through the model storage root.
+- Tests cover independent overrides, relative-path rejection, directory creation and cache environment behaviour.
+
+## Still not implemented
+
+- UI/API for choosing paths and checking free space.
+- Per-path write-probe validation surfaced to the user.
+- Safe data migration, dry-run sizing, rollback and active-job protection.
+- Auditing every optional dependency's cache/temp behaviour on Windows.
+
+This is a staged foundation, not a claim that all storage requirements are complete.
