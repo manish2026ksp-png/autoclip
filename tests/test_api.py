@@ -423,6 +423,7 @@ class TestSecretsNeverLeak:
         assert "DEADBEEF" not in paths.config_path().read_text(encoding="utf-8")
         assert config.get_secret("anthropic") == "sk-DEADBEEF"
 
+
 class TestStorage:
     def test_storage_status_reports_configured_locations(self, client: TestClient) -> None:
         response = client.get("/api/system/storage")
@@ -451,9 +452,7 @@ class TestStorage:
         self, client: TestClient, tmp_path
     ) -> None:
         destination = tmp_path / "external-drive" / "melyqon"
-        response = client.post(
-            "/api/system/storage/validate", json={"path": str(destination)}
-        )
+        response = client.post("/api/system/storage/validate", json={"path": str(destination)})
 
         assert response.status_code == 200
         body = response.json()
@@ -473,4 +472,3 @@ class TestStorage:
 
         assert response.status_code == 200
         assert response.json()["directory_created"] is False
-
