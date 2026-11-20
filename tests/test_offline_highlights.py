@@ -1,4 +1,5 @@
 """Tests for the deterministic offline highlight baseline."""
+
 from __future__ import annotations
 
 from autoclip.pipeline.offline_highlights import detect_candidates
@@ -21,10 +22,7 @@ def test_empty_transcript_returns_no_candidates() -> None:
 
 
 def test_offline_candidates_use_valid_word_indices_and_duration() -> None:
-    text = " ".join(
-        "यह बहुत जरूरी बात है और इसे ध्यान से समझना चाहिए।"
-        for _ in range(18)
-    )
+    text = " ".join("यह बहुत जरूरी बात है और इसे ध्यान से समझना चाहिए।" for _ in range(18))
     transcript = Transcript(words=make_words(text))
     config = DetectionConfig(min_duration_s=20, max_duration_s=90, max_clips=5)
 
@@ -39,9 +37,9 @@ def test_offline_candidates_use_valid_word_indices_and_duration() -> None:
 
 
 def test_offline_detection_is_deterministic() -> None:
-    transcript = Transcript(words=make_words(
-        "This is important. Remember this useful lesson. " * 12
-    ))
+    transcript = Transcript(
+        words=make_words("This is important. Remember this useful lesson. " * 12)
+    )
     config = DetectionConfig(min_duration_s=10, max_duration_s=30, max_clips=4)
 
     first = detect_candidates(transcript, config)
@@ -51,9 +49,7 @@ def test_offline_detection_is_deterministic() -> None:
 
 
 def test_reason_explains_the_scoring_signals() -> None:
-    transcript = Transcript(words=make_words(
-        "This important solution works. " * 15
-    ))
+    transcript = Transcript(words=make_words("This important solution works. " * 15))
     candidates = detect_candidates(
         transcript, DetectionConfig(min_duration_s=10, max_duration_s=30)
     )
