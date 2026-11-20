@@ -224,6 +224,7 @@ class ProviderStatusOut(BaseModel):
 
 class SettingsOut(BaseModel):
     active_provider: str
+    highlight_mode: Literal["offline", "provider"]
     providers: dict[str, dict[str, Any]]
     whisper: dict[str, Any]
     clips: dict[str, Any]
@@ -237,6 +238,7 @@ class SettingsOut(BaseModel):
 
 class SettingsIn(BaseModel):
     active_provider: str | None = None
+    highlight_mode: Literal["offline", "provider"] | None = None
     providers: dict[str, dict[str, Any]] | None = None
     whisper: dict[str, Any] | None = None
     clips: dict[str, Any] | None = None
