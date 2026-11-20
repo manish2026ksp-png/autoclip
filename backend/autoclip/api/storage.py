@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 import tempfile
 from pathlib import Path
@@ -33,9 +34,9 @@ def _storage_entry(name: str, path: Path) -> dict:
         "path": str(path),
         "exists": exists,
         "is_directory": path.is_dir() if exists else False,
-        "writable": path.is_dir() and __import__("os").access(path, __import__("os").W_OK)
+        "writable": path.is_dir() and os.access(path, os.W_OK)
         if exists
-        else __import__("os").access(probe, __import__("os").W_OK),
+        else os.access(probe, os.W_OK),
         "free_bytes": free_bytes,
     }
 
