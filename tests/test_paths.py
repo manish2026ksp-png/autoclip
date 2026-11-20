@@ -73,7 +73,7 @@ class TestLegacyHomeAdoption:
         legacy_home = tmp_path / paths.LEGACY_DIR_NAME
         legacy_home.mkdir()
         legacy_db = legacy_home / paths.LEGACY_DB_NAME
-        legacy_db.write_bytes(b"SQLite format 3\\x00")
+        legacy_db.write_bytes(b"SQLite format 3\x00")
 
         # Pointing at a fresh autoclip.db beside it would silently orphan every
         # job the user already has.
