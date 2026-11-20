@@ -12,6 +12,7 @@ from collections.abc import Iterator
 import pytest
 from autoclip import app as app_module
 from autoclip import config
+from autoclip.api import sources as sources_module
 from autoclip.app import create_app
 from autoclip.db import store
 from autoclip.db.models import Clip, Job, Source, new_id
@@ -179,6 +180,34 @@ class TestSources:
 
         assert response.status_code == 415
         assert "supported" in response.json()["detail"]["message"]
+
+    def test_staging_file_is_removed_after_unexpected_ingest_error(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        real_named_tempfile = sources_module.tempfile.NamedTemporaryFile
+        staging_paths = []
+
+        def record_staging_file(*args, **kwargs):
+            staging = real_named_tempfile(*args, **kwargs)
+            staging_paths.append(Path(staging.name))
+            return staging
+
+        def fail_ingest(*args, **kwargs):
+            raise RuntimeError("unexpected ingest failure")
+
+        monkeypatch.setattr(
+            sources_module.tempfile, "NamedTemporaryFile", record_staging_file
+        )
+        monkeypatch.setattr(sources_module.ingest, "ingest_file", fail_ingest)
+
+        with pytest.raises(RuntimeError, match="unexpected ingest failure"):
+            client.post(
+                "/api/sources/upload",
+                files={"file": ("sample.mp4", b"video-data", "video/mp4")},
+            )
+
+        assert len(staging_paths) == 1
+        assert not staging_paths[0].exists()
 
 
 class TestJobs:
