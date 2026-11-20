@@ -1,4 +1,4 @@
-"""Filesystem layout resolution."""
+""""Filesystem layout resolution."""
 
 from __future__ import annotations
 
@@ -73,7 +73,7 @@ class TestLegacyHomeAdoption:
         legacy_home = tmp_path / paths.LEGACY_DIR_NAME
         legacy_home.mkdir()
         legacy_db = legacy_home / paths.LEGACY_DB_NAME
-        legacy_db.write_bytes(b"SQLite format 3\x00")
+        legacy_db.write_bytes(b"SQLite format 3\\x00")
 
         # Pointing at a fresh autoclip.db beside it would silently orphan every
         # job the user already has.
@@ -180,15 +180,21 @@ def test_library_cache_environment_respects_existing_values(
     monkeypatch.setenv(paths.ENV_TEMP, str(temporary))
     monkeypatch.setenv("HF_HOME", str(cache / "hf-explicit"))
     cache_variables = (
-        "HF_HUB_CACHE", "HUGGINGFACE_HUB_CACHE", "TORCH_HOME",
-        "XDG_CACHE_HOME", "TMP", "TEMP", "TMPDIR",
+        "HF_HUB_CACHE",
+        "HUGGINGFACE_HUB_CACHE",
+        "TORCH_HOME",
+        "XDG_CACHE_HOME",
+        "TMP",
+        "TEMP",
+        "TMPDIR",
     )
     for variable in cache_variables:
         monkeypatch.delenv(variable, raising=False)
     paths.configure_cache_environment()
     assert os.environ["HF_HOME"] == str(cache / "hf-explicit")
-    assert os.environ["HF_HUB_CACHE"] == str(temporary / 'cache' / 'huggingface' / 'hub')
-    assert os.environ["HUGGINGFACE_HUB_CACHE"] == str(temporary / 'cache' / 'huggingface' / 'hub')
-    assert os.environ["TORCH_HOME"] == str(temporary / 'cache' / 'torch')
-    assert os.environ["XDG_CACHE_HOME"] == str(temporary / 'cache')
+    assert os.environ["HF_HUB_CACHE"] == str(temporary / "cache" / "huggingface" / "hub")
+    assert os.environ["HUGGINGFACE_HUB_CACHE"] == str(temporary / "cache" / "huggingface" / "hub")
+    assert os.environ["TORCH_HOME"] == str(temporary / "cache" / "torch")
+    assert os.environ["XDG_CACHE_HOME"] == str(temporary / "cache")
     assert os.environ["TMP"] == str(temporary)
+"
