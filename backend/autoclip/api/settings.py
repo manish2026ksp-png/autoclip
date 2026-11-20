@@ -21,6 +21,7 @@ def _settings_out(settings: config.Settings) -> SettingsOut:
     payload = settings.model_dump(mode="json")
     return SettingsOut(
         active_provider=payload["active_provider"],
+        highlight_mode=payload["highlight_mode"],
         providers=payload["providers"],
         whisper=payload["whisper"],
         clips=payload["clips"],
@@ -44,6 +45,9 @@ async def put_settings(payload: SettingsIn) -> SettingsOut:
     """Merge a partial settings update and persist it."""
     settings = config.load()
     updates = payload.model_dump(exclude_none=True)
+
+    if "highlight_mode" in updates:
+        settings.highlight_mode = updates["highlight_mode"]
 
     if "active_provider" in updates:
         if updates["active_provider"] not in PROVIDERS:
