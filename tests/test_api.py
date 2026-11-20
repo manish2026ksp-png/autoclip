@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import sys
 from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
 from autoclip import app as app_module
