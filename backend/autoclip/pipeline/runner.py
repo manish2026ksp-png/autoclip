@@ -287,6 +287,11 @@ class PipelineRunner:
             clips = highlights.build_clips(
                 transcript, candidates, config, job_id=self.job.id, silences=silences
             )
+            if not clips:
+                raise highlights.HighlightError(
+                    "No suitable clips met the selected duration range. "
+                    "Try shorter minimum clip length or review the transcript."
+                )
             self._emit(stage, 1.0, "Offline highlight ranking complete")
         else:
             provider_name = self.job.provider or self.settings.active_provider
