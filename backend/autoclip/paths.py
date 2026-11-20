@@ -1,85 +1,84 @@
-"""Filesystem layout for AutoClip artifacts.
+"""Filesystem layout and independently configurable storage roots.
 
-Everything AutoClip writes lives under a single root (``~/.autoclip`` by
-default). The root is resolved through ``AUTOCLIP_HOME`` so tests — and users
-who keep media on another drive — can relocate it without touching code.
-
-Layout::
-
-    <root>/
-      media/            source videos, one directory per source id
-      work/<job_id>/    stage intermediates (audio, transcript, crop path)
-      exports/          finished clips
-      autoclip.db       SQLite database
-      config.json       settings (secrets live in the OS keyring)
+All paths default beneath ~/.autoclip (or AUTOCLIP_HOME), preserving existing
+installations. Optional environment overrides let users place large media,
+model and temporary data on another drive without moving app state.
 """
 
 from __future__ import annotations
 
 import logging
 import os
+import tempfile
 from pathlib import Path
 
 log = logging.getLogger(__name__)
 
 ENV_HOME = "AUTOCLIP_HOME"
+ENV_MEDIA = "AUTOCLIP_MEDIA_DIR"
+ENV_WORK = "AUTOCLIP_WORK_DIR"
+ENV_EXPORTS = "AUTOCLIP_EXPORTS_DIR"
+ENV_MODELS = "AUTOCLIP_MODELS_DIR"
+ENV_TEMP = "AUTOCLIP_TEMP_DIR"
 
 DEFAULT_DIR_NAME = ".autoclip"
-
-#: The project was called ClipForge before release. An install that predates the
-#: rename has its media, database, and settings under the old name, and media
-#: files are far too large to copy silently — so the old directory is adopted in
-#: place when the new one doesn't exist yet.
 LEGACY_DIR_NAME = ".clipforge"
-
-
-def root() -> Path:
-    """Return the AutoClip home directory.
-
-    Resolved fresh on every call rather than cached at import time, so tests
-    that patch ``AUTOCLIP_HOME`` take effect without reloading the module.
-    """
-    override = os.environ.get(ENV_HOME)
-    if override:
-        return Path(override).expanduser().resolve()
-
-    default = Path.home() / DEFAULT_DIR_NAME
-    if not default.exists():
-        legacy = Path.home() / LEGACY_DIR_NAME
-        if legacy.is_dir():
-            log.info(
-                "Using the pre-rename data directory %s. Rename it to %s when "
-                "convenient; AutoClip will use whichever it finds.",
-                legacy,
-                default,
-            )
-            return legacy.resolve()
-
-    return default.resolve()
-
-
-def media_dir() -> Path:
-    return root() / "media"
-
-
-def work_dir() -> Path:
-    return root() / "work"
-
-
-def exports_dir() -> Path:
-    return root() / "exports"
-
-
 DB_NAME = "autoclip.db"
 LEGACY_DB_NAME = "clipforge.db"
 
 
-def db_path() -> Path:
-    """Return the SQLite database path.
+def _configured_path(variable: str, fallback: Path) -> Path:
+    """Resolve an optional absolute path override."""
+    value = os.environ.get(variable)
+    if not value:
+        return fallback.resolve()
+    candidate = Path(value).expanduser()
+    if not candidate.is_absolute():
+        raise ValueError(f"{variable} must be an absolute path, got: {value!r}")
+    return candidate.resolve()
 
-    Adopts a pre-rename database in place rather than starting an empty one
-    beside it, which would silently orphan every job the user already has.
-    """
+
+def root() -> Path:
+    """Return app state root, retaining legacy-directory adoption."""
+    override = os.environ.get(ENV_HOME)
+    if override:
+        return _configured_path(ENV_HOME, Path(override))
+    default = Path.home() / DEFAULT_DIR_NAME
+    if not default.exists():
+        legacy = Path.home() / LEGACY_DIR_NAME
+        if legacy.is_dir():
+            log.info("Using legacy data directory %s.", legacy)
+            return legacy.resolve()
+    return default.resolve()
+
+
+def media_dir() -> Path:
+    return _configured_path(ENV_MEDIA, root() / "media")
+
+
+def work_dir() -> Path:
+    return _configured_path(ENV_WORK, root() / "work")
+
+
+def exports_dir() -> Path:
+    return _configured_path(ENV_EXPORTS, root() / "exports")
+
+
+def models_dir() -> Path:
+    return _configured_path(ENV_MODELS, root() / "models")
+
+
+def temp_dir() -> Path:
+    return _configured_path(ENV_TEMP, root() / "tmp")
+
+
+def cache_dir() -> Path:
+    """Library cache root beneath the configurable temp directory."""
+    return temp_dir() / "cache"
+
+
+def db_path() -> Path:
+    """Return SQLite path, adopting a legacy filename in place."""
     base = root()
     current = base / DB_NAME
     if not current.exists():
@@ -94,21 +93,31 @@ def config_path() -> Path:
 
 
 def job_work_dir(job_id: str) -> Path:
-    """Return the per-job scratch directory for pipeline stage artifacts."""
     return work_dir() / job_id
 
 
 def source_media_dir(source_id: str) -> Path:
-    """Return the directory holding a source's downloaded/uploaded media."""
     return media_dir() / source_id
 
 
-def ensure_layout() -> Path:
-    """Create the directory tree if absent and return the root.
+def configure_cache_environment() -> None:
+    """Redirect common library caches before ML libraries are imported."""
+    cache = cache_dir()
+    os.environ.setdefault("HF_HOME", str(cache / "huggingface"))
+    os.environ.setdefault("HUGGINGFACE_HUB_CACHE", str(cache / "huggingface" / "hub"))
+    os.environ.setdefault("TORCH_HOME", str(cache / "torch"))
+    os.environ.setdefault("XDG_CACHE_HOME", str(cache))
+    temporary = temp_dir()
+    os.environ.setdefault("TMP", str(temporary))
+    os.environ.setdefault("TEMP", str(temporary))
+    os.environ.setdefault("TMPDIR", str(temporary))
+    if tempfile.tempdir is None:
+        tempfile.tempdir = os.environ.get("TMP") or os.environ.get("TEMP")
 
-    Safe to call repeatedly; used on startup and at the top of each CLI command.
-    """
+
+def ensure_layout() -> Path:
+    """Create all configured storage directories; safe to call repeatedly."""
     base = root()
-    for path in (base, media_dir(), work_dir(), exports_dir()):
-        path.mkdir(parents=True, exist_ok=True)
+    for directory in (base, media_dir(), work_dir(), exports_dir(), models_dir(), temp_dir()):
+        directory.mkdir(parents=True, exist_ok=True)
     return base
