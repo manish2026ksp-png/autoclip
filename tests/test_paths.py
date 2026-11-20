@@ -1,4 +1,4 @@
-""""Filesystem layout resolution."""
+"""Filesystem layout resolution."""
 
 from __future__ import annotations
 
