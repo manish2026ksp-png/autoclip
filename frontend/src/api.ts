@@ -152,6 +152,27 @@ export interface Settings {
   keys_present: Record<string, boolean>
 }
 
+export interface StorageLocation {
+  name: string
+  path: string
+  exists: boolean
+  is_directory: boolean
+  writable: boolean
+  free_bytes: number | null
+}
+
+export interface StorageStatus {
+  locations: StorageLocation[]
+  migration_supported: boolean
+}
+
+export interface StorageValidation {
+  valid: boolean
+  path: string
+  free_bytes: number
+  directory_created: boolean
+}
+
 export interface SystemStatus {
   ready: boolean
   python_version: string
@@ -226,6 +247,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   health: () => request<{ status: string; version: string }>('/api/health'),
   system: () => request<SystemStatus>('/api/system'),
+  storageStatus: () => request<StorageStatus>('/api/system/storage'),
+  validateStoragePath: (path: string) =>
+    request<StorageValidation>('/api/system/storage/validate', {
+      method: 'POST',
+      body: JSON.stringify({ path }),
+    }),
   downloadModel: (model: string) =>
     request<void>(`/api/system/models/${encodeURIComponent(model)}`, { method: 'POST' }),
   downloadWhisperModel: (model: string) =>
