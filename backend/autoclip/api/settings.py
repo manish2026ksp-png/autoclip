@@ -184,12 +184,15 @@ async def download_whisper_model(model_name: str) -> None:
         ) from exc
 
 
-@router.post("/system/models", status_code=204)
-async def fetch_models() -> None:
-    """Download any missing ML model bundles."""
-    for key in models.MODELS:
-        if not models.is_available(key):
-            try:
-                await asyncio.to_thread(models.download, key)
-            except models.ModelDownloadError as exc:
-                raise HTTPException(status_code=502, detail=str(exc)) from exc
+@router.post("/system/models/{model_key}", status_code=204)
+async def download_model(model_key: str) -> None:
+    """Download exactly one explicitly selected model bundle."""
+    if model_key not in models.MODELS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown model. Available: {', '.join(sorted(models.MODELS))}",
+        )
+    try:
+        await asyncio.to_thread(models.download, model_key)
+    except models.ModelDownloadError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
