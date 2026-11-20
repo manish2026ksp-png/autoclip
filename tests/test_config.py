@@ -13,6 +13,7 @@ def test_defaults_load_without_a_config_file() -> None:
     settings = config.load()
 
     assert settings.active_provider == "anthropic"
+    assert settings.highlight_mode == "offline"
     assert settings.whisper.model == "small"
     assert settings.export.loudness_lufs == -14.0
     assert set(settings.providers) == {"anthropic", "openai", "gemini", "ollama"}
@@ -21,12 +22,14 @@ def test_defaults_load_without_a_config_file() -> None:
 def test_settings_round_trip() -> None:
     settings = config.load()
     settings.active_provider = "ollama"
+    settings.highlight_mode = "provider"
     settings.whisper.model = "large-v3"
     settings.clips.max_clips = 25
     config.save(settings)
 
     reloaded = config.load()
     assert reloaded.active_provider == "ollama"
+    assert reloaded.highlight_mode == "provider"
     assert reloaded.whisper.model == "large-v3"
     assert reloaded.clips.max_clips == 25
 
