@@ -61,17 +61,24 @@ def is_available(key: str) -> bool:
     return path.exists() and path.stat().st_size > 0
 
 
-def ensure(key: str, *, timeout: float = 120.0) -> Path:
-    """Return a local path to the model, downloading it if absent.
-
-    Preconditions:
-        The process can write to the AutoClip home directory.
-    """
+def ensure(key: str) -> Path:
+    """Return an installed model path; never access the network implicitly."""
     spec = _spec(key)
     destination = model_path(key)
     if destination.exists() and destination.stat().st_size > 0:
         return destination
+    raise ModelDownloadError(
+        f"The {key} model is not installed. Download it explicitly from Settings first. "
+        f"Expected location: {destination}"
+    )
 
+
+def download(key: str, *, timeout: float = 120.0) -> Path:
+    """Download a model only when called by an explicit user-requested action."""
+    spec = _spec(key)
+    destination = model_path(key)
+    if destination.exists() and destination.stat().st_size > 0:
+        return destination
     destination.parent.mkdir(parents=True, exist_ok=True)
     log.info("Downloading %s (~%.1f MB)...", spec.filename, spec.approx_bytes / 1_048_576)
 
