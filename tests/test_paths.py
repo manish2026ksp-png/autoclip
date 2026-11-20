@@ -155,21 +155,31 @@ def test_relative_storage_override_is_rejected(monkeypatch: pytest.MonkeyPatch) 
         paths.media_dir()
 
 
-def test_configured_layout_creates_all_storage_roots(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_configured_layout_creates_all_storage_roots(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     locations = [tmp_path / name for name in ('media', 'work', 'exports', 'models', 'temp')]
-    variables = [paths.ENV_MEDIA, paths.ENV_WORK, paths.ENV_EXPORTS, paths.ENV_MODELS, paths.ENV_TEMP]
+    variables = [
+        paths.ENV_MEDIA, paths.ENV_WORK, paths.ENV_EXPORTS, paths.ENV_MODELS, paths.ENV_TEMP
+    ]
     for variable, location in zip(variables, locations, strict=True):
         monkeypatch.setenv(variable, str(location))
     paths.ensure_layout()
     assert all(location.is_dir() for location in locations)
 
 
-def test_library_cache_environment_respects_existing_values(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_library_cache_environment_respects_existing_values(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     cache = tmp_path / 'custom-cache'
     temporary = tmp_path / 'custom-temp'
     monkeypatch.setenv(paths.ENV_TEMP, str(temporary))
     monkeypatch.setenv('HF_HOME', str(cache / 'hf-explicit'))
-    for variable in ('HF_HUB_CACHE', 'HUGGINGFACE_HUB_CACHE', 'TORCH_HOME', 'XDG_CACHE_HOME', 'TMP', 'TEMP', 'TMPDIR'):
+    cache_variables = (
+        'HF_HUB_CACHE', 'HUGGINGFACE_HUB_CACHE', 'TORCH_HOME',
+        'XDG_CACHE_HOME', 'TMP', 'TEMP', 'TMPDIR',
+    )
+    for variable in cache_variables:
         monkeypatch.delenv(variable, raising=False)
     paths.configure_cache_environment()
     assert os.environ['HF_HOME'] == str(cache / 'hf-explicit')
