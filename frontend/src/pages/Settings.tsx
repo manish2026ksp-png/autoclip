@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 
 import { api, type ProviderStatus, type Settings as SettingsData, type SystemStatus } from '../api'
 import { ErrorNote } from '../components/ErrorNote'
+import { StorageSettings } from '../components/StorageSettings'
 
 const SECRET_LABELS: Record<string, string> = {
   anthropic: 'Anthropic API key',
@@ -308,6 +309,8 @@ export function Settings() {
           Also write an .srt sidecar
         </label>
       </Section>
+
+      <StorageSettings />
 
       <Section title="Optional model downloads" note="Nothing downloads until you press a button.">
         <div className="flex flex-wrap items-center gap-3">
