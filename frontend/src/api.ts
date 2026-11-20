@@ -131,6 +131,7 @@ export interface ProviderStatus {
 
 export interface Settings {
   active_provider: string
+  highlight_mode: 'offline' | 'provider'
   providers: Record<string, { model: string; base_url: string | null }>
   whisper: { model: string; compute_type: string; language: string; diarization: boolean }
   clips: { min_duration_s: number; max_duration_s: number; max_clips: number }
