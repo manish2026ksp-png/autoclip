@@ -22,7 +22,7 @@ def test_empty_transcript_returns_no_candidates() -> None:
 
 def test_offline_candidates_use_valid_word_indices_and_duration() -> None:
     text = " ".join(
-        f"यह बहुत जरूरी बात है और इसे ध्यान से समझना चाहिए।"
+        "यह बहुत जरूरी बात है और इसे ध्यान से समझना चाहिए।"
         for _ in range(18)
     )
     transcript = Transcript(words=make_words(text))
