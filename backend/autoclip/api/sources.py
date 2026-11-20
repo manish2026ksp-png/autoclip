@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import shutil
 import tempfile
 from pathlib import Path
 
@@ -98,7 +97,7 @@ async def upload_source(file: UploadFile = File(...)) -> SourceOut:
             status_code=422, detail={"message": str(exc), "hint": exc.hint}
         ) from exc
     finally:
-        shutil.rmtree(staging_path.parent / staging_path.name, ignore_errors=True)
+        staging_path.unlink(missing_ok=True)
 
     await asyncio.to_thread(store.create_source, source)
     return SourceOut.of(source)
