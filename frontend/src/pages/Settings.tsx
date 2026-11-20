@@ -18,6 +18,7 @@ export function Settings() {
   const [saved, setSaved] = useState(false)
   const [modelBusy, setModelBusy] = useState(false)
   const [modelMessage, setModelMessage] = useState('')
+  const [faceModelBusy, setFaceModelBusy] = useState(false)
 
   const reload = () => {
     void api.getSettings().then(setSettings).catch((e) => setError(e as Error))
@@ -26,6 +27,19 @@ export function Settings() {
   }
 
   useEffect(reload, [])
+
+  const downloadFaceModel = async () => {
+    setFaceModelBusy(true)
+    setError(null)
+    try {
+      await api.fetchModels()
+      setModelMessage('Face tracking model downloaded and cached locally.')
+    } catch (err) {
+      setError(err as Error)
+    } finally {
+      setFaceModelBusy(false)
+    }
+  }
 
   const downloadWhisper = async () => {
     if (!settings) return
@@ -295,6 +309,16 @@ export function Settings() {
         </label>
       </Section>
 
+      <Section title="Optional model downloads" note="Nothing downloads until you press a button.">
+        <div className="flex flex-wrap items-center gap-3">
+          <button onClick={downloadFaceModel} disabled={faceModelBusy} className="btn btn-ghost">
+            {faceModelBusy ? 'Downloading face model…' : 'Download face-tracking model (~3.6 MB)'}
+          </button>
+          <span className="text-xs text-ink-500">
+            Without it, portrait reframing falls back to a centred crop.
+          </span>
+        </div>
+      </Section>
       {system && (
         <Section title="This machine">
           <dl className="grid gap-x-8 gap-y-3 text-sm sm:grid-cols-2">
