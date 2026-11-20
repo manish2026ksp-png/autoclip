@@ -46,7 +46,7 @@ class ModelDownloadError(RuntimeError):
 
 
 def models_dir() -> Path:
-    return paths.root() / "models"
+    return paths.models_dir()
 
 
 def model_path(key: str) -> Path:
