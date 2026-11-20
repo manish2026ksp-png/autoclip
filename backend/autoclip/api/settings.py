@@ -151,6 +151,39 @@ async def system_status() -> SystemOut:
     )
 
 
+@router.post("/system/models/whisper/{model_name}", status_code=204)
+async def download_whisper_model(model_name: str) -> None:
+    """Explicitly download one selected Whisper model; never called by a job."""
+    allowed = {"tiny", "base", "small", "medium", "large-v3"}
+    if model_name not in allowed:
+        raise HTTPException(
+            status_code=400, detail=f"Unsupported Whisper model. Choose: {', '.join(sorted(allowed))}"
+        )
+
+    def download() -> None:
+        from faster_whisper import WhisperModel
+
+        cache_root = models.whisper_models_dir()
+        cache_root.mkdir(parents=True, exist_ok=True)
+        # This endpoint is the explicit user-consent boundary. Normal jobs use
+        # local_files_only=True and cannot trigger a network request.
+        WhisperModel(
+            model_name,
+            device="cpu",
+            compute_type="int8",
+            download_root=str(cache_root),
+            local_files_only=False,
+        )
+
+    try:
+        await asyncio.to_thread(download)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Could not download Whisper model '{model_name}': {exc}",
+        ) from exc
+
+
 @router.post("/system/models", status_code=204)
 async def fetch_models() -> None:
     """Download any missing ML model bundles."""
