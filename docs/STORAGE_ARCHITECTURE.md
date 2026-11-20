@@ -18,7 +18,7 @@ The database stores absolute paths for source media, transcripts and exports. Ch
 1. Media, work files, exports, database and models are all derived from the same root.
 2. `faster-whisper` is given a dedicated model download root, but hidden Hugging Face / Torch / XDG caches are not centrally redirected.
 3. ffmpeg and Python temporary files may use the operating system's default temp directory.
-4. There is no UI/API for independent storage locations, free-space checks, validation or safe migration.
+4. Storage diagnostics and destination validation are available in Settings, but selecting and persisting independent roots is not yet implemented.
 5. The existing `AUTOCLIP_HOME` behaviour and legacy adoption must remain supported for existing installs.
 
 ## Target layout
@@ -52,9 +52,10 @@ Each root should support an environment override first. Persisted UI settings ca
 1. Add a central path registry with backward-compatible defaults and tests for independent overrides.
 2. Audit every filesystem write and route it through the registry; identify any library cache that needs an environment variable set before import.
 3. Add path validation and disk-space reporting APIs.
-4. Add Settings UI for choosing each location and explaining what is stored there.
-5. Add explicit, staged migration with a dry-run estimate, no overwrite, verification, rollback, and a requirement that no jobs are active.
-6. Test Windows paths, spaces, Unicode, removable drives, unavailable drives, low disk, interrupted migration, and existing legacy installs.
+4. Add Settings UI for current locations, free-space reporting and candidate-folder write validation.
+5. Add persisted path selection only after restart semantics, active-job protection and cache initialization are designed.
+6. Add explicit, staged migration with a dry-run estimate, no overwrite, verification, rollback, and a requirement that no jobs are active.
+7. Test Windows paths, spaces, Unicode, removable drives, unavailable drives, low disk, interrupted migration, and existing legacy installs.
 
 ## Implemented in the product-foundation branch
 
@@ -65,10 +66,15 @@ Each root should support an environment override first. Persisted UI settings ca
 - Model storage and Whisper's dedicated cache now resolve through the model storage root.
 - Tests cover independent overrides, relative-path rejection, directory creation and cache environment behaviour.
 
+## Storage UI status
+
+- Settings now displays all six configured storage locations, directory state, write-access status and available disk space.
+- Users can validate a candidate absolute folder with a real create/write/delete probe; the UI clearly states that this does not change active storage.
+- Path selection/persistence and safe migration remain intentionally disabled until active-job handling, process restart behaviour and cache reinitialization are implemented.
+
 ## Still not implemented
 
-- UI/API for choosing paths and checking free space.
-- Per-path write-probe validation surfaced to the user.
+- Persisted UI selection of independent storage paths.
 - Safe data migration, dry-run sizing, rollback and active-job protection.
 - Auditing every optional dependency's cache/temp behaviour on Windows.
 
