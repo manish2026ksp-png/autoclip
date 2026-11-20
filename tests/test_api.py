@@ -430,7 +430,15 @@ class TestStorage:
         assert response.status_code == 200
         body = response.json()
         names = {item["name"] for item in body["locations"]}
-        assert {"Application data", "Media", "Projects and work", "Models", "Temporary files and cache", "Exports"} <= names
+        expected_names = {
+            "Application data",
+            "Media",
+            "Projects and work",
+            "Models",
+            "Temporary files and cache",
+            "Exports",
+        }
+        assert expected_names <= names
         assert body["migration_supported"] is False
 
     def test_storage_validation_rejects_relative_paths(self, client: TestClient) -> None:
