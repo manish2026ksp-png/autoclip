@@ -169,10 +169,11 @@ def test_library_cache_environment_respects_existing_values(tmp_path: Path, monk
     temporary = tmp_path / 'custom-temp'
     monkeypatch.setenv(paths.ENV_TEMP, str(temporary))
     monkeypatch.setenv('HF_HOME', str(cache / 'hf-explicit'))
-    for variable in ('HUGGINGFACE_HUB_CACHE', 'TORCH_HOME', 'XDG_CACHE_HOME', 'TMP', 'TEMP', 'TMPDIR'):
+    for variable in ('HF_HUB_CACHE', 'HUGGINGFACE_HUB_CACHE', 'TORCH_HOME', 'XDG_CACHE_HOME', 'TMP', 'TEMP', 'TMPDIR'):
         monkeypatch.delenv(variable, raising=False)
     paths.configure_cache_environment()
     assert os.environ['HF_HOME'] == str(cache / 'hf-explicit')
+    assert os.environ['HF_HUB_CACHE'] == str(temporary / 'cache' / 'huggingface' / 'hub')
     assert os.environ['HUGGINGFACE_HUB_CACHE'] == str(temporary / 'cache' / 'huggingface' / 'hub')
     assert os.environ['TORCH_HOME'] == str(temporary / 'cache' / 'torch')
     assert os.environ['XDG_CACHE_HOME'] == str(temporary / 'cache')
