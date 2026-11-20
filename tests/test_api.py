@@ -196,9 +196,7 @@ class TestSources:
         def fail_ingest(*args, **kwargs):
             raise RuntimeError("unexpected ingest failure")
 
-        monkeypatch.setattr(
-            sources_module.tempfile, "NamedTemporaryFile", record_staging_file
-        )
+        monkeypatch.setattr(sources_module.tempfile, "NamedTemporaryFile", record_staging_file)
         monkeypatch.setattr(sources_module.ingest, "ingest_file", fail_ingest)
 
         with pytest.raises(RuntimeError, match="unexpected ingest failure"):
