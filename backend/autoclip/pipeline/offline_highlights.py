@@ -4,6 +4,7 @@ This is a transparent baseline, not a semantic substitute for a human editor:
 it ranks complete transcript spans using punctuation, pacing, and a small
 multilingual cue vocabulary. It performs no network or model calls.
 """
+
 from __future__ import annotations
 
 import re
@@ -13,14 +14,46 @@ from .transcript import Transcript
 
 _HOOK_CUES = {
     "en": {
-        "but", "because", "secret", "mistake", "important", "remember", "never",
-        "always", "why", "how", "result", "learn", "problem", "solution", "tip",
-        "first", "finally", "imagine", "actually",
+        "but",
+        "because",
+        "secret",
+        "mistake",
+        "important",
+        "remember",
+        "never",
+        "always",
+        "why",
+        "how",
+        "result",
+        "learn",
+        "problem",
+        "solution",
+        "tip",
+        "first",
+        "finally",
+        "imagine",
+        "actually",
     },
     "hi": {
-        "लेकिन", "क्योंकि", "जरूरी", "महत्वपूर्ण", "याद", "गलती", "समस्या",
-        "समाधान", "तरीका", "सीख", "पहला", "आखिर", "मतलब", "ध्यान", "सच",
-        "कभी", "हमेशा", "कैसे", "क्यों",
+        "लेकिन",
+        "क्योंकि",
+        "जरूरी",
+        "महत्वपूर्ण",
+        "याद",
+        "गलती",
+        "समस्या",
+        "समाधान",
+        "तरीका",
+        "सीख",
+        "पहला",
+        "आखिर",
+        "मतलब",
+        "ध्यान",
+        "सच",
+        "कभी",
+        "हमेशा",
+        "कैसे",
+        "क्यों",
     },
 }
 _TOKEN = re.compile(r"[\w]+", re.UNICODE)
@@ -56,25 +89,21 @@ def detect_candidates(
 
     for first in starts:
         first_time = words[first].start
-        target_end = first_time + min(
-            config.max_duration_s, max(config.min_duration_s, 45.0)
-        )
+        target_end = first_time + min(config.max_duration_s, max(config.min_duration_s, 45.0))
         last = first
         while last + 1 < len(words) and words[last].end < target_end:
             last += 1
 
         # Prefer a complete sentence close to the target duration.
-        sentence_ends = [
-            i for i in range(first, last + 1) if words[i].ends_sentence
-        ]
+        sentence_ends = [i for i in range(first, last + 1) if words[i].ends_sentence]
         if sentence_ends:
             last = min(sentence_ends, key=lambda i: abs(words[i].end - target_end))
         if words[last].end - first_time < config.min_duration_s:
             # Extend to the first sentence end that reaches the minimum.
             eligible = [
-                i for i in range(last + 1, len(words))
-                if words[i].ends_sentence
-                and words[i].end - first_time <= config.max_duration_s
+                i
+                for i in range(last + 1, len(words))
+                if words[i].ends_sentence and words[i].end - first_time <= config.max_duration_s
             ]
             if eligible:
                 last = eligible[0]
@@ -97,8 +126,7 @@ def detect_candidates(
         cue_count = len(tokens & cue_words)
         sentence_end_count = sum(word.ends_sentence for word in span)
         pause_count = sum(
-            1 for i in range(first + 1, last + 1)
-            if transcript.pause_before(i) >= 0.5
+            1 for i in range(first + 1, last + 1) if transcript.pause_before(i) >= 0.5
         )
         speech_density = len(span) / max(duration, 1.0)
 
