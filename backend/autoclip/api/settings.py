@@ -157,7 +157,9 @@ async def download_whisper_model(model_name: str) -> None:
     allowed = {"tiny", "base", "small", "medium", "large-v3"}
     if model_name not in allowed:
         raise HTTPException(
-            status_code=400, detail=f"Unsupported Whisper model. Choose: {', '.join(sorted(allowed))}"
+            available = ", ".join(sorted(allowed))
+            status_code=400,
+            detail=f"Unsupported Whisper model. Choose: {available}",
         )
 
     def download() -> None:
