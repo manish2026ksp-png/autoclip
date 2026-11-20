@@ -56,6 +56,13 @@ def model_path(key: str) -> Path:
     return models_dir() / spec.filename
 
 
+def whisper_model_path(name: str) -> Path:
+    """Return the dedicated local directory for a faster-whisper model."""
+    if name not in {"tiny", "base", "small", "medium", "large-v3"}:
+        raise ModelDownloadError(f"Unsupported Whisper model {name!r}.")
+    return models_dir() / "whisper" / name
+
+
 def is_available(key: str) -> bool:
     path = model_path(key)
     return path.exists() and path.stat().st_size > 0
