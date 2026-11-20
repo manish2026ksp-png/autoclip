@@ -112,7 +112,11 @@ def configure_cache_environment() -> None:
     os.environ.setdefault("TMP", str(temporary))
     os.environ.setdefault("TEMP", str(temporary))
     os.environ.setdefault("TMPDIR", str(temporary))
-    tempfile.tempdir = os.environ.get("TMP") or os.environ.get("TEMP")
+    temporary.mkdir(parents=True, exist_ok=True)
+    # tempfile caches its first resolved directory process-wide. Reset that
+    # cache after changing TMP* so later environment changes (including tests)
+    # are respected instead of reusing a stale, possibly removed directory.
+    tempfile.tempdir = None
 
 
 def ensure_layout() -> Path:
