@@ -422,3 +422,47 @@ class TestSecretsNeverLeak:
 
         assert "DEADBEEF" not in paths.config_path().read_text(encoding="utf-8")
         assert config.get_secret("anthropic") == "sk-DEADBEEF"
+
+class TestStorage:
+    def test_storage_status_reports_configured_locations(self, client: TestClient) -> None:
+        response = client.get("/api/system/storage")
+
+        assert response.status_code == 200
+        body = response.json()
+        names = {item["name"] for item in body["locations"]}
+        assert {"Application data", "Media", "Projects and work", "Models", "Temporary files and cache", "Exports"} <= names
+        assert body["migration_supported"] is False
+
+    def test_storage_validation_rejects_relative_paths(self, client: TestClient) -> None:
+        response = client.post("/api/system/storage/validate", json={"path": "relative/folder"})
+
+        assert response.status_code == 400
+        assert "absolute" in response.json()["detail"].lower()
+
+    def test_storage_validation_creates_and_checks_directory(
+        self, client: TestClient, tmp_path
+    ) -> None:
+        destination = tmp_path / "external-drive" / "melyqon"
+        response = client.post(
+            "/api/system/storage/validate", json={"path": str(destination)}
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["valid"] is True
+        assert body["directory_created"] is True
+        assert destination.is_dir()
+        assert not list(destination.glob(".melyqon-write-test-*"))
+
+    def test_storage_validation_reports_existing_directory(
+        self, client: TestClient, tmp_path
+    ) -> None:
+        destination = tmp_path / "existing"
+        destination.mkdir()
+        response = client.post(
+            "/api/system/storage/validate", json={"path": str(destination)}
+        )
+
+        assert response.status_code == 200
+        assert response.json()["directory_created"] is False
+
