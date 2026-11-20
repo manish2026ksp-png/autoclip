@@ -226,6 +226,8 @@ export const api = {
   health: () => request<{ status: string; version: string }>('/api/health'),
   system: () => request<SystemStatus>('/api/system'),
   fetchModels: () => request<void>('/api/system/models', { method: 'POST' }),
+  downloadWhisperModel: (model: string) =>
+    request<void>(`/api/system/models/whisper/${encodeURIComponent(model)}`, { method: 'POST' }),
 
   listSources: () => request<Source[]>('/api/sources'),
 
