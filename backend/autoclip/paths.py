@@ -104,6 +104,7 @@ def configure_cache_environment() -> None:
     """Redirect common library caches before ML libraries are imported."""
     cache = cache_dir()
     os.environ.setdefault("HF_HOME", str(cache / "huggingface"))
+    os.environ.setdefault("HF_HUB_CACHE", str(cache / "huggingface" / "hub"))
     os.environ.setdefault("HUGGINGFACE_HUB_CACHE", str(cache / "huggingface" / "hub"))
     os.environ.setdefault("TORCH_HOME", str(cache / "torch"))
     os.environ.setdefault("XDG_CACHE_HOME", str(cache))
@@ -111,8 +112,7 @@ def configure_cache_environment() -> None:
     os.environ.setdefault("TMP", str(temporary))
     os.environ.setdefault("TEMP", str(temporary))
     os.environ.setdefault("TMPDIR", str(temporary))
-    if tempfile.tempdir is None:
-        tempfile.tempdir = os.environ.get("TMP") or os.environ.get("TEMP")
+    tempfile.tempdir = os.environ.get("TMP") or os.environ.get("TEMP")
 
 
 def ensure_layout() -> Path:
