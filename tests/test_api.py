@@ -283,6 +283,7 @@ class TestSources:
                 return False
 
             def extract_info(self, url, download):
+                assert self.options["paths"]["temp"] == str(paths.temp_dir())
                 output = Path(self.options["outtmpl"].replace("%(ext)s", "mp4"))
                 output.write_bytes(b"media")
                 return {"title": "Test video"}
