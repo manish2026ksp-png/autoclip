@@ -4,13 +4,16 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import shutil
 import tempfile
 from pathlib import Path
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
+from .. import paths
 from ..config import load as load_settings
 from ..db import store
+from ..db.models import Source
 from ..pipeline import ingest
 from .schemas import SourceOut, YouTubeIngestIn
 
@@ -21,6 +24,13 @@ router = APIRouter(prefix="/api/sources", tags=["sources"])
 #: Uploads stream to disk in chunks rather than being buffered whole — source
 #: videos routinely exceed available RAM.
 UPLOAD_CHUNK = 4 * 1024 * 1024
+
+
+def _discard_unregistered_source(source: Source) -> None:
+    """Remove only the media directory created for a source not saved in SQLite."""
+    source_dir = paths.source_media_dir(source.id)
+    if Path(source.path).parent.resolve() == source_dir.resolve():
+        shutil.rmtree(source_dir, ignore_errors=True)
 
 
 @router.get("", response_model=list[SourceOut])
@@ -58,7 +68,11 @@ async def ingest_youtube(payload: YouTubeIngestIn) -> SourceOut:
             status_code=422, detail={"message": str(exc), "hint": exc.hint}
         ) from exc
 
-    await asyncio.to_thread(store.create_source, source)
+    try:
+        await asyncio.to_thread(store.create_source, source)
+    except Exception:
+        _discard_unregistered_source(source)
+        raise
     return SourceOut.of(source)
 
 
