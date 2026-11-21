@@ -209,7 +209,6 @@ class TestSources:
         assert len(staging_paths) == 1
         assert not staging_paths[0].exists()
 
-
     def test_upload_media_is_removed_if_source_record_cannot_be_saved(
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
