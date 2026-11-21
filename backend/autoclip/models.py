@@ -85,15 +85,35 @@ def download(key: str, *, timeout: float = 120.0) -> Path:
     destination.parent.mkdir(parents=True, exist_ok=True)
     log.info("Downloading %s (~%.1f MB)...", spec.filename, spec.approx_bytes / 1_048_576)
 
-    # Download to a temp file and move into place, so an interrupted fetch can
-    # never leave a truncated model that then fails cryptically at inference.
+    # Stage beside the destination so the final replace is atomic on the same
+    # filesystem. A failed or interrupted transfer must never look installed.
     temporary = destination.with_suffix(destination.suffix + ".part")
     try:
         with (
             urllib.request.urlopen(spec.url, timeout=timeout) as response,  # noqa: S310
             temporary.open("wb") as handle,
         ):
+            content_length = response.headers.get("Content-Length")
             shutil.copyfileobj(response, handle)
+
+        actual_bytes = temporary.stat().st_size
+        if actual_bytes == 0:
+            raise ModelDownloadError(f"The downloaded {spec.key} model was empty.")
+
+        # Content-Length is a transfer-completeness check, not a cryptographic
+        # checksum. Some servers omit it, so absence does not block installation.
+        if content_length is not None:
+            try:
+                expected_bytes = int(content_length)
+            except ValueError as exc:
+                raise ModelDownloadError(
+                    f"The {spec.key} server returned an invalid Content-Length header."
+                ) from exc
+            if actual_bytes != expected_bytes:
+                raise ModelDownloadError(
+                    f"The {spec.key} download was incomplete: received {actual_bytes} "
+                    f"of {expected_bytes} bytes. Please retry."
+                )
     except (urllib.error.URLError, OSError, TimeoutError) as exc:
         temporary.unlink(missing_ok=True)
         raise ModelDownloadError(
@@ -103,10 +123,11 @@ def download(key: str, *, timeout: float = 120.0) -> Path:
             f"If this machine has no internet access, download the file manually "
             f"and place it at {destination}."
         ) from exc
-
-    if temporary.stat().st_size == 0:
+    except BaseException:
+        # Also clean up on cancellation/interrupt, but preserve the original
+        # exception so callers can handle cancellation normally.
         temporary.unlink(missing_ok=True)
-        raise ModelDownloadError(f"The downloaded {spec.key} model was empty.")
+        raise
 
     temporary.replace(destination)
     log.info("Saved %s", destination)
