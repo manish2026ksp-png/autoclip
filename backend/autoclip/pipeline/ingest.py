@@ -135,7 +135,11 @@ def ingest_youtube(
         shutil.rmtree(target_dir, ignore_errors=True)
         raise IngestError("yt-dlp reported success but produced no media file.")
 
-    info = _probe_and_validate(downloaded)
+    try:
+        info = _probe_and_validate(downloaded)
+    except Exception:
+        shutil.rmtree(target_dir, ignore_errors=True)
+        raise
 
     return Source(
         id=source_id,
