@@ -113,5 +113,9 @@ async def upload_source(file: UploadFile = File(...)) -> SourceOut:
     finally:
         staging_path.unlink(missing_ok=True)
 
-    await asyncio.to_thread(store.create_source, source)
+    try:
+        await asyncio.to_thread(store.create_source, source)
+    except Exception:
+        _discard_unregistered_source(source)
+        raise
     return SourceOut.of(source)
