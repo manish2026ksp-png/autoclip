@@ -207,6 +207,7 @@ class TestSources:
             )
 
         assert len(staging_paths) == 1
+        assert staging_paths[0].parent == paths.temp_dir()
         assert not staging_paths[0].exists()
 
     def test_upload_media_is_removed_if_source_record_cannot_be_saved(
