@@ -71,8 +71,20 @@ def _model_load_error(exc: Exception, device: str, compute_type: str) -> Transcr
             "or set it to one of the supported values."
         )
 
-    if "model" in lowered and (
-        "not found" in lowered or "does not exist" in lowered or "local_files_only" in lowered
+    # huggingface_hub uses these exception classes when local_files_only=True
+    # cannot resolve a cached snapshot. Its message often says nothing about the
+    # model name, so string matching alone misses the most common offline case.
+    cache_error_types = {"LocalEntryNotFoundError", "EntryNotFoundError"}
+    if type(exc).__name__ in cache_error_types or (
+        ("cached snapshot" in lowered and "local disk" in lowered)
+        or (
+            "model" in lowered
+            and (
+                "not found" in lowered
+                or "does not exist" in lowered
+                or "local_files_only" in lowered
+            )
+        )
     ):
         return TranscriptionError(
             "The selected Whisper model is not installed in the local cache. "
