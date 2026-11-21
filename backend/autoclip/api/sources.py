@@ -92,9 +92,7 @@ async def upload_source(file: UploadFile = File(...)) -> SourceOut:
 
     # Stage to a temp file first so a failed or abandoned upload never leaves a
     # half-written file in the media store.
-    with tempfile.NamedTemporaryFile(
-        delete=False, suffix=suffix, dir=paths.temp_dir()
-    ) as staging:
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix, dir=paths.temp_dir()) as staging:
         staging_path = Path(staging.name)
         try:
             while chunk := await file.read(UPLOAD_CHUNK):
