@@ -188,7 +188,7 @@ class TestWhisperModelDownload:
             sys.modules, "faster_whisper", types.SimpleNamespace(WhisperModel=unexpected_import)
         )
 
-        response = client.post("/api/system/models/english-only")
+        response = client.post("/api/system/models/whisper/english-only")
 
         assert response.status_code == 400
         assert "Unsupported Whisper model" in response.json()["detail"]
