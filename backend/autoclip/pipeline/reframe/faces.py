@@ -110,7 +110,10 @@ def sample_faces(
 
     from ... import models
 
-    model_file = models.ensure("face_landmarker")
+    try:
+        model_file = models.ensure("face_landmarker")
+    except models.ModelDownloadError as exc:
+        raise FaceDetectionUnavailable(str(exc)) from exc
 
     options = FaceLandmarkerOptions(
         base_options=BaseOptions(model_asset_path=str(model_file)),

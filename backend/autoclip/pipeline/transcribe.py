@@ -71,6 +71,27 @@ def _model_load_error(exc: Exception, device: str, compute_type: str) -> Transcr
             "or set it to one of the supported values."
         )
 
+    # huggingface_hub uses these exception classes when local_files_only=True
+    # cannot resolve a cached snapshot. Its message often says nothing about the
+    # model name, so string matching alone misses the most common offline case.
+    cache_error_types = {"LocalEntryNotFoundError", "EntryNotFoundError"}
+    if type(exc).__name__ in cache_error_types or (
+        ("cached snapshot" in lowered and "local disk" in lowered)
+        or (
+            "model" in lowered
+            and (
+                "not found" in lowered
+                or "does not exist" in lowered
+                or "local_files_only" in lowered
+            )
+        )
+    ):
+        return TranscriptionError(
+            "The selected Whisper model is not installed in the local cache. "
+            "Open Settings and explicitly download this model, then retry. "
+            "Transcription never downloads models automatically."
+        )
+
     if device == "cuda" and ("cudnn" in lowered or "library" in lowered or "dll" in lowered):
         return TranscriptionError(
             f"Could not load Whisper on the GPU: {message}\n\n"
@@ -100,6 +121,7 @@ def transcribe(
 
     # Must happen before faster-whisper pulls in CTranslate2, which resolves its
     # CUDA dependencies at import.
+    from .. import models
     from ..cuda import ensure_cuda_libraries
 
     ensure_cuda_libraries()
@@ -120,7 +142,14 @@ def transcribe(
     )
 
     try:
-        model = WhisperModel(settings.model, device=device, compute_type=compute_type)
+        cache_root = models.whisper_models_dir()
+        model = WhisperModel(
+            settings.model,
+            device=device,
+            compute_type=compute_type,
+            download_root=str(cache_root),
+            local_files_only=True,
+        )
     except Exception as exc:
         raise _model_load_error(exc, device, compute_type) from exc
 

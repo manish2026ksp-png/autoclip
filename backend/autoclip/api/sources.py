@@ -10,8 +10,10 @@ from pathlib import Path
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
+from .. import paths
 from ..config import load as load_settings
 from ..db import store
+from ..db.models import Source
 from ..pipeline import ingest
 from .schemas import SourceOut, YouTubeIngestIn
 
@@ -22,6 +24,13 @@ router = APIRouter(prefix="/api/sources", tags=["sources"])
 #: Uploads stream to disk in chunks rather than being buffered whole — source
 #: videos routinely exceed available RAM.
 UPLOAD_CHUNK = 4 * 1024 * 1024
+
+
+def _discard_unregistered_source(source: Source) -> None:
+    """Remove only the media directory created for a source not saved in SQLite."""
+    source_dir = paths.source_media_dir(source.id)
+    if Path(source.path).parent.resolve() == source_dir.resolve():
+        shutil.rmtree(source_dir, ignore_errors=True)
 
 
 @router.get("", response_model=list[SourceOut])
@@ -59,7 +68,11 @@ async def ingest_youtube(payload: YouTubeIngestIn) -> SourceOut:
             status_code=422, detail={"message": str(exc), "hint": exc.hint}
         ) from exc
 
-    await asyncio.to_thread(store.create_source, source)
+    try:
+        await asyncio.to_thread(store.create_source, source)
+    except Exception:
+        _discard_unregistered_source(source)
+        raise
     return SourceOut.of(source)
 
 
@@ -79,7 +92,7 @@ async def upload_source(file: UploadFile = File(...)) -> SourceOut:
 
     # Stage to a temp file first so a failed or abandoned upload never leaves a
     # half-written file in the media store.
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as staging:
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix, dir=paths.temp_dir()) as staging:
         staging_path = Path(staging.name)
         try:
             while chunk := await file.read(UPLOAD_CHUNK):
@@ -98,7 +111,11 @@ async def upload_source(file: UploadFile = File(...)) -> SourceOut:
             status_code=422, detail={"message": str(exc), "hint": exc.hint}
         ) from exc
     finally:
-        shutil.rmtree(staging_path.parent / staging_path.name, ignore_errors=True)
+        staging_path.unlink(missing_ok=True)
 
-    await asyncio.to_thread(store.create_source, source)
+    try:
+        await asyncio.to_thread(store.create_source, source)
+    except Exception:
+        _discard_unregistered_source(source)
+        raise
     return SourceOut.of(source)

@@ -131,6 +131,7 @@ export interface ProviderStatus {
 
 export interface Settings {
   active_provider: string
+  highlight_mode: 'offline' | 'provider'
   providers: Record<string, { model: string; base_url: string | null }>
   whisper: { model: string; compute_type: string; language: string; diarization: boolean }
   clips: { min_duration_s: number; max_duration_s: number; max_clips: number }
@@ -149,6 +150,27 @@ export interface Settings {
   }
   insecure_secret_storage: boolean
   keys_present: Record<string, boolean>
+}
+
+export interface StorageLocation {
+  name: string
+  path: string
+  exists: boolean
+  is_directory: boolean
+  writable: boolean
+  free_bytes: number | null
+}
+
+export interface StorageStatus {
+  locations: StorageLocation[]
+  migration_supported: boolean
+}
+
+export interface StorageValidation {
+  valid: boolean
+  path: string
+  free_bytes: number
+  directory_created: boolean
 }
 
 export interface SystemStatus {
@@ -225,7 +247,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   health: () => request<{ status: string; version: string }>('/api/health'),
   system: () => request<SystemStatus>('/api/system'),
-  fetchModels: () => request<void>('/api/system/models', { method: 'POST' }),
+  storageStatus: () => request<StorageStatus>('/api/system/storage'),
+  validateStoragePath: (path: string) =>
+    request<StorageValidation>('/api/system/storage/validate', {
+      method: 'POST',
+      body: JSON.stringify({ path }),
+    }),
+  downloadModel: (model: string) =>
+    request<void>(`/api/system/models/${encodeURIComponent(model)}`, { method: 'POST' }),
+  downloadWhisperModel: (model: string) =>
+    request<void>(`/api/system/models/whisper/${encodeURIComponent(model)}`, { method: 'POST' }),
 
   listSources: () => request<Source[]>('/api/sources'),
 

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 
 import { api, type ProviderStatus, type Settings as SettingsData, type SystemStatus } from '../api'
 import { ErrorNote } from '../components/ErrorNote'
+import { StorageSettings } from '../components/StorageSettings'
 
 const SECRET_LABELS: Record<string, string> = {
   anthropic: 'Anthropic API key',
@@ -16,6 +17,9 @@ export function Settings() {
   const [system, setSystem] = useState<SystemStatus | null>(null)
   const [error, setError] = useState<Error | null>(null)
   const [saved, setSaved] = useState(false)
+  const [modelBusy, setModelBusy] = useState(false)
+  const [modelMessage, setModelMessage] = useState('')
+  const [faceModelBusy, setFaceModelBusy] = useState(false)
 
   const reload = () => {
     void api.getSettings().then(setSettings).catch((e) => setError(e as Error))
@@ -24,6 +28,34 @@ export function Settings() {
   }
 
   useEffect(reload, [])
+
+  const downloadFaceModel = async () => {
+    setFaceModelBusy(true)
+    setError(null)
+    try {
+      await api.downloadModel('face_landmarker')
+      setModelMessage('Face tracking model downloaded and cached locally.')
+    } catch (err) {
+      setError(err as Error)
+    } finally {
+      setFaceModelBusy(false)
+    }
+  }
+
+  const downloadWhisper = async () => {
+    if (!settings) return
+    setModelBusy(true)
+    setModelMessage('')
+    setError(null)
+    try {
+      await api.downloadWhisperModel(settings.whisper.model)
+      setModelMessage(settings.whisper.model + ' model downloaded and cached locally.')
+    } catch (err) {
+      setError(err as Error)
+    } finally {
+      setModelBusy(false)
+    }
+  }
 
   const patch = async (update: Partial<SettingsData>) => {
     setError(null)
@@ -163,6 +195,15 @@ export function Settings() {
             onCommit={(value) => patch({ whisper: { ...settings.whisper, language: value } })}
           />
         </div>
+        <div className="mt-5 flex flex-wrap items-center gap-3">
+          <button onClick={downloadWhisper} disabled={modelBusy} className="btn btn-ghost">
+            {modelBusy ? 'Downloading selected model…' : 'Download ' + settings.whisper.model + ' model'}
+          </button>
+          <span className="text-xs text-ink-500">
+            Downloads only after you click. Whisper weights are multilingual, not separate Hindi/English packs.
+          </span>
+        </div>
+        {modelMessage && <p className="mt-3 text-xs text-signal-good">{modelMessage}</p>}
 
         <label className="mt-5 flex items-start gap-3 text-sm text-ink-200">
           <input
@@ -269,6 +310,18 @@ export function Settings() {
         </label>
       </Section>
 
+      <StorageSettings />
+
+      <Section title="Optional model downloads" note="Nothing downloads until you press a button.">
+        <div className="flex flex-wrap items-center gap-3">
+          <button onClick={downloadFaceModel} disabled={faceModelBusy} className="btn btn-ghost">
+            {faceModelBusy ? 'Downloading face model…' : 'Download face-tracking model (~3.6 MB)'}
+          </button>
+          <span className="text-xs text-ink-500">
+            Without it, portrait reframing falls back to a centred crop.
+          </span>
+        </div>
+      </Section>
       {system && (
         <Section title="This machine">
           <dl className="grid gap-x-8 gap-y-3 text-sm sm:grid-cols-2">

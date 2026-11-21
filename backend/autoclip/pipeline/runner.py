@@ -25,7 +25,7 @@ from ..db import store
 from ..db.models import Clip, Export, Job, Source, new_id, utcnow
 from ..db.models import Transcript as TranscriptRow
 from ..providers import build_provider, detection_config
-from . import Stage, captions, export, ffmpeg, highlights, prepare, transcribe
+from . import Stage, captions, export, ffmpeg, highlights, offline_highlights, prepare, transcribe
 from .prepare import Silence
 from .reframe import ReframeConfig, build_crop_path
 from .reframe.croppath import CropPath
@@ -280,19 +280,31 @@ class PipelineRunner:
             self._finish_stage(stage)
             return existing
 
-        provider_name = self.job.provider or self.settings.active_provider
-        provider = build_provider(provider_name, self.settings)
         config = detection_config(self.settings)
-
-        self._emit(stage, 0.0, f"Finding highlights with {provider.name}")
-        clips = await highlights.detect(
-            transcript,
-            provider,
-            config,
-            job_id=self.job.id,
-            silences=silences,
-            on_progress=self._stage_progress(stage),
-        )
+        if self.settings.highlight_mode == "offline":
+            self._emit(stage, 0.0, "Finding highlights offline")
+            candidates = offline_highlights.detect_candidates(transcript, config)
+            clips = highlights.build_clips(
+                transcript, candidates, config, job_id=self.job.id, silences=silences
+            )
+            if not clips:
+                raise highlights.HighlightError(
+                    "No suitable clips met the selected duration range. "
+                    "Try shorter minimum clip length or review the transcript."
+                )
+            self._emit(stage, 1.0, "Offline highlight ranking complete")
+        else:
+            provider_name = self.job.provider or self.settings.active_provider
+            provider = build_provider(provider_name, self.settings)
+            self._emit(stage, 0.0, f"Finding highlights with {provider.name}")
+            clips = await highlights.detect(
+                transcript,
+                provider,
+                config,
+                job_id=self.job.id,
+                silences=silences,
+                on_progress=self._stage_progress(stage),
+            )
 
         store.replace_clips(self.job.id, clips)
         self._finish_stage(stage)

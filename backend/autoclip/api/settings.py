@@ -21,6 +21,7 @@ def _settings_out(settings: config.Settings) -> SettingsOut:
     payload = settings.model_dump(mode="json")
     return SettingsOut(
         active_provider=payload["active_provider"],
+        highlight_mode=payload["highlight_mode"],
         providers=payload["providers"],
         whisper=payload["whisper"],
         clips=payload["clips"],
@@ -44,6 +45,9 @@ async def put_settings(payload: SettingsIn) -> SettingsOut:
     """Merge a partial settings update and persist it."""
     settings = config.load()
     updates = payload.model_dump(exclude_none=True)
+
+    if "highlight_mode" in updates:
+        settings.highlight_mode = updates["highlight_mode"]
 
     if "active_provider" in updates:
         if updates["active_provider"] not in PROVIDERS:
@@ -147,12 +151,50 @@ async def system_status() -> SystemOut:
     )
 
 
-@router.post("/system/models", status_code=204)
-async def fetch_models() -> None:
-    """Download any missing ML model bundles."""
-    for key in models.MODELS:
-        if not models.is_available(key):
-            try:
-                await asyncio.to_thread(models.ensure, key)
-            except models.ModelDownloadError as exc:
-                raise HTTPException(status_code=502, detail=str(exc)) from exc
+@router.post("/system/models/whisper/{model_name}", status_code=204)
+async def download_whisper_model(model_name: str) -> None:
+    """Explicitly download one selected Whisper model; never called by a job."""
+    allowed = {"tiny", "base", "small", "medium", "large-v3"}
+    if model_name not in allowed:
+        available = ", ".join(sorted(allowed))
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported Whisper model. Choose: {available}",
+        )
+
+    def download() -> None:
+        from faster_whisper import WhisperModel
+
+        cache_root = models.whisper_models_dir()
+        cache_root.mkdir(parents=True, exist_ok=True)
+        # This endpoint is the explicit user-consent boundary. Normal jobs use
+        # local_files_only=True and cannot trigger a network request.
+        WhisperModel(
+            model_name,
+            device="cpu",
+            compute_type="int8",
+            download_root=str(cache_root),
+            local_files_only=False,
+        )
+
+    try:
+        await asyncio.to_thread(download)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Could not download Whisper model '{model_name}': {exc}",
+        ) from exc
+
+
+@router.post("/system/models/{model_key}", status_code=204)
+async def download_model(model_key: str) -> None:
+    """Download exactly one explicitly selected model bundle."""
+    if model_key not in models.MODELS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown model. Available: {', '.join(sorted(models.MODELS))}",
+        )
+    try:
+        await asyncio.to_thread(models.download, model_key)
+    except models.ModelDownloadError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc

@@ -7,11 +7,15 @@ migration, event broker binding, and job queue startup are all covered too.
 from __future__ import annotations
 
 import sys
+import types
 from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
 from autoclip import app as app_module
-from autoclip import config
+from autoclip import config, paths
+from autoclip.api import settings as settings_module
+from autoclip.api import sources as sources_module
 from autoclip.app import create_app
 from autoclip.db import store
 from autoclip.db.models import Clip, Job, Source, new_id
@@ -147,6 +151,65 @@ class TestSettings:
         assert client.get("/api/settings").json()["keys_present"]["openai"] is False
 
 
+class TestWhisperModelDownload:
+    def test_downloads_only_the_explicitly_selected_model(
+        self, client: TestClient, tmp_path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        calls = []
+        cache_root = tmp_path / "models" / "whisper"
+
+        class FakeWhisperModel:
+            def __init__(self, model_name, **kwargs):
+                calls.append((model_name, kwargs))
+
+        monkeypatch.setattr(settings_module.models, "whisper_models_dir", lambda: cache_root)
+        monkeypatch.setitem(
+            sys.modules, "faster_whisper", types.SimpleNamespace(WhisperModel=FakeWhisperModel)
+        )
+
+        response = client.post("/api/system/models/whisper/base")
+
+        assert response.status_code == 204
+        assert cache_root.is_dir()
+        assert len(calls) == 1
+        assert calls[0][0] == "base"
+        assert calls[0][1]["download_root"] == str(cache_root)
+        assert calls[0][1]["local_files_only"] is False
+        assert calls[0][1]["device"] == "cpu"
+        assert calls[0][1]["compute_type"] == "int8"
+
+    def test_rejects_unapproved_model_without_starting_download(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        def unexpected_import():
+            raise AssertionError("unsupported model must be rejected before download")
+
+        monkeypatch.setitem(
+            sys.modules, "faster_whisper", types.SimpleNamespace(WhisperModel=unexpected_import)
+        )
+
+        response = client.post("/api/system/models/whisper/english-only")
+
+        assert response.status_code == 400
+        assert "Unsupported Whisper model" in response.json()["detail"]
+
+    def test_download_failure_is_reported_as_gateway_error(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        class BrokenWhisperModel:
+            def __init__(self, *args, **kwargs):
+                raise OSError("network interrupted")
+
+        monkeypatch.setitem(
+            sys.modules, "faster_whisper", types.SimpleNamespace(WhisperModel=BrokenWhisperModel)
+        )
+
+        response = client.post("/api/system/models/whisper/tiny")
+
+        assert response.status_code == 502
+        assert "network interrupted" in response.json()["detail"]
+
+
 class TestSources:
     def test_empty_initially(self, client: TestClient) -> None:
         assert client.get("/api/sources").json() == []
@@ -179,6 +242,129 @@ class TestSources:
 
         assert response.status_code == 415
         assert "supported" in response.json()["detail"]["message"]
+
+    def test_staging_file_is_removed_after_unexpected_ingest_error(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        real_named_tempfile = sources_module.tempfile.NamedTemporaryFile
+        staging_paths = []
+
+        def record_staging_file(*args, **kwargs):
+            staging = real_named_tempfile(*args, **kwargs)
+            staging_paths.append(Path(staging.name))
+            return staging
+
+        def fail_ingest(*args, **kwargs):
+            raise RuntimeError("unexpected ingest failure")
+
+        monkeypatch.setattr(sources_module.tempfile, "NamedTemporaryFile", record_staging_file)
+        monkeypatch.setattr(sources_module.ingest, "ingest_file", fail_ingest)
+
+        with pytest.raises(RuntimeError, match="unexpected ingest failure"):
+            client.post(
+                "/api/sources/upload",
+                files={"file": ("sample.mp4", b"video-data", "video/mp4")},
+            )
+
+        assert len(staging_paths) == 1
+        assert staging_paths[0].parent == paths.temp_dir()
+        assert not staging_paths[0].exists()
+
+    def test_upload_media_is_removed_if_source_record_cannot_be_saved(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        source_id = new_id()
+        source_dir = paths.source_media_dir(source_id)
+        source_dir.mkdir(parents=True)
+        media_path = source_dir / "source.mp4"
+        media_path.write_bytes(b"media")
+        source = Source(id=source_id, type="upload", path=str(media_path), title="Upload")
+
+        def fail_save(*args, **kwargs):
+            raise RuntimeError("database write failed")
+
+        monkeypatch.setattr(sources_module.ingest, "ingest_file", lambda *args, **kwargs: source)
+        monkeypatch.setattr(store, "create_source", fail_save)
+
+        with pytest.raises(RuntimeError, match="database write failed"):
+            client.post(
+                "/api/sources/upload",
+                files={"file": ("sample.mp4", b"video-data", "video/mp4")},
+            )
+
+        assert not source_dir.exists()
+
+    def test_youtube_media_is_removed_if_source_record_cannot_be_saved(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        source_id = new_id()
+        source_dir = paths.source_media_dir(source_id)
+        source_dir.mkdir(parents=True)
+        media_path = source_dir / "source.mp4"
+        media_path.write_bytes(b"media")
+        source = Source(id=source_id, type="youtube", path=str(media_path), title="YouTube")
+
+        def fail_save(*args, **kwargs):
+            raise RuntimeError("database write failed")
+
+        monkeypatch.setattr(sources_module.ingest, "is_youtube_url", lambda url: True)
+        monkeypatch.setattr(sources_module.ingest, "ingest_youtube", lambda *args, **kwargs: source)
+        monkeypatch.setattr(store, "create_source", fail_save)
+
+        with pytest.raises(RuntimeError, match="database write failed"):
+            client.post("/api/sources/youtube", json={"url": "https://youtube.com/watch?v=test"})
+
+        assert not source_dir.exists()
+
+    def test_youtube_media_is_removed_if_media_probe_fails(
+        self, autoclip_home, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from autoclip.pipeline import ingest
+
+        source_dirs: list[Path] = []
+        original_source_media_dir = paths.source_media_dir
+
+        def record_source_dir(source_id: str) -> Path:
+            directory = original_source_media_dir(source_id)
+            source_dirs.append(directory)
+            return directory
+
+        class FakeDownloadError(Exception):
+            pass
+
+        class FakeYoutubeDL:
+            def __init__(self, options):
+                self.options = options
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def extract_info(self, url, download):
+                assert self.options["paths"]["temp"] == str(paths.temp_dir())
+                output = Path(self.options["outtmpl"].replace("%(ext)s", "mp4"))
+                output.write_bytes(b"media")
+                return {"title": "Test video"}
+
+        fake_yt_dlp = types.SimpleNamespace(
+            YoutubeDL=FakeYoutubeDL,
+            utils=types.SimpleNamespace(DownloadError=FakeDownloadError),
+        )
+
+        def fail_probe(path):
+            raise RuntimeError("probe failed")
+
+        monkeypatch.setitem(sys.modules, "yt_dlp", fake_yt_dlp)
+        monkeypatch.setattr(paths, "source_media_dir", record_source_dir)
+        monkeypatch.setattr(ingest.ffmpeg, "probe", fail_probe)
+
+        with pytest.raises(RuntimeError, match="probe failed"):
+            ingest.ingest_youtube("https://youtube.com/watch?v=test")
+
+        assert len(source_dirs) == 1
+        assert not source_dirs[0].exists()
 
 
 class TestJobs:
@@ -422,3 +608,51 @@ class TestSecretsNeverLeak:
 
         assert "DEADBEEF" not in paths.config_path().read_text(encoding="utf-8")
         assert config.get_secret("anthropic") == "sk-DEADBEEF"
+
+
+class TestStorage:
+    def test_storage_status_reports_configured_locations(self, client: TestClient) -> None:
+        response = client.get("/api/system/storage")
+
+        assert response.status_code == 200
+        body = response.json()
+        names = {item["name"] for item in body["locations"]}
+        expected_names = {
+            "Application data",
+            "Media",
+            "Projects and work",
+            "Models",
+            "Temporary files and cache",
+            "Exports",
+        }
+        assert expected_names <= names
+        assert body["migration_supported"] is False
+
+    def test_storage_validation_rejects_relative_paths(self, client: TestClient) -> None:
+        response = client.post("/api/system/storage/validate", json={"path": "relative/folder"})
+
+        assert response.status_code == 400
+        assert "absolute" in response.json()["detail"].lower()
+
+    def test_storage_validation_creates_and_checks_directory(
+        self, client: TestClient, tmp_path
+    ) -> None:
+        destination = tmp_path / "external-drive" / "melyqon"
+        response = client.post("/api/system/storage/validate", json={"path": str(destination)})
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["valid"] is True
+        assert body["directory_created"] is True
+        assert destination.is_dir()
+        assert not list(destination.glob(".melyqon-write-test-*"))
+
+    def test_storage_validation_reports_existing_directory(
+        self, client: TestClient, tmp_path
+    ) -> None:
+        destination = tmp_path / "existing"
+        destination.mkdir()
+        response = client.post("/api/system/storage/validate", json={"path": str(destination)})
+
+        assert response.status_code == 200
+        assert response.json()["directory_created"] is False

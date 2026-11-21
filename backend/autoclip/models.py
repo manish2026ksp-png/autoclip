@@ -1,9 +1,7 @@
-"""On-demand download and caching of ML model bundles.
+"""Explicit download and local caching of ML model bundles.
 
-MediaPipe's task bundles are a few megabytes each. Fetching them on first use
-into ``~/.autoclip/models/`` keeps them out of the repository and out of the
-wheel, which is the same thing Whisper does with its weights — users expect it,
-and it keeps ``pip install autoclip`` small.
+Model files live outside the repository. Inference must only use files already
+installed by an explicit user action; this module never downloads implicitly.
 """
 
 from __future__ import annotations
@@ -48,7 +46,7 @@ class ModelDownloadError(RuntimeError):
 
 
 def models_dir() -> Path:
-    return paths.root() / "models"
+    return paths.models_dir()
 
 
 def model_path(key: str) -> Path:
@@ -56,34 +54,66 @@ def model_path(key: str) -> Path:
     return models_dir() / spec.filename
 
 
+def whisper_models_dir() -> Path:
+    """Dedicated Hugging Face cache root for faster-whisper weights."""
+    return models_dir() / "whisper"
+
+
 def is_available(key: str) -> bool:
     path = model_path(key)
     return path.exists() and path.stat().st_size > 0
 
 
-def ensure(key: str, *, timeout: float = 120.0) -> Path:
-    """Return a local path to the model, downloading it if absent.
+def ensure(key: str) -> Path:
+    """Return an installed model path; never access the network implicitly."""
+    _spec(key)  # Validate the model key before checking its installed state.
+    destination = model_path(key)
+    if destination.exists() and destination.stat().st_size > 0:
+        return destination
+    raise ModelDownloadError(
+        f"The {key} model is not installed. Download it explicitly from Settings first. "
+        f"Expected location: {destination}"
+    )
 
-    Preconditions:
-        The process can write to the AutoClip home directory.
-    """
+
+def download(key: str, *, timeout: float = 120.0) -> Path:
+    """Download a model only when called by an explicit user-requested action."""
     spec = _spec(key)
     destination = model_path(key)
     if destination.exists() and destination.stat().st_size > 0:
         return destination
-
     destination.parent.mkdir(parents=True, exist_ok=True)
     log.info("Downloading %s (~%.1f MB)...", spec.filename, spec.approx_bytes / 1_048_576)
 
-    # Download to a temp file and move into place, so an interrupted fetch can
-    # never leave a truncated model that then fails cryptically at inference.
+    # Stage beside the destination so the final replace is atomic on the same
+    # filesystem. A failed or interrupted transfer must never look installed.
     temporary = destination.with_suffix(destination.suffix + ".part")
     try:
         with (
             urllib.request.urlopen(spec.url, timeout=timeout) as response,  # noqa: S310
             temporary.open("wb") as handle,
         ):
+            content_length = response.headers.get("Content-Length")
             shutil.copyfileobj(response, handle)
+
+        actual_bytes = temporary.stat().st_size
+        if actual_bytes == 0:
+            raise ModelDownloadError(f"The downloaded {spec.key} model was empty.")
+
+        # Content-Length is a transfer-completeness check, not a cryptographic
+        # checksum. Some servers omit it, so absence does not block installation.
+        if content_length is not None:
+            try:
+                expected_bytes = int(content_length)
+            except ValueError as exc:
+                raise ModelDownloadError(
+                    f"The {spec.key} server returned an invalid Content-Length header."
+                ) from exc
+            if actual_bytes != expected_bytes:
+                raise ModelDownloadError(
+                    f"The {spec.key} download was incomplete: received {actual_bytes} "
+                    f"of {expected_bytes} bytes. Please retry."
+                )
     except (urllib.error.URLError, OSError, TimeoutError) as exc:
         temporary.unlink(missing_ok=True)
         raise ModelDownloadError(
@@ -93,10 +123,11 @@ def ensure(key: str, *, timeout: float = 120.0) -> Path:
             f"If this machine has no internet access, download the file manually "
             f"and place it at {destination}."
         ) from exc
-
-    if temporary.stat().st_size == 0:
+    except BaseException:
+        # Also clean up on cancellation/interrupt, but preserve the original
+        # exception so callers can handle cancellation normally.
         temporary.unlink(missing_ok=True)
-        raise ModelDownloadError(f"The downloaded {spec.key} model was empty.")
+        raise
 
     temporary.replace(destination)
     log.info("Saved %s", destination)

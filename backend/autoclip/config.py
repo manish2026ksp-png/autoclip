@@ -98,6 +98,8 @@ class Settings(BaseModel):
     """Top-level persisted settings."""
 
     active_provider: ProviderName = "anthropic"
+    #: Offline deterministic clip ranking is the privacy-first product default.
+    highlight_mode: Literal["offline", "provider"] = "offline"
     providers: dict[str, ProviderSettings] = Field(
         default_factory=lambda: {
             "anthropic": ProviderSettings(model="claude-sonnet-5"),

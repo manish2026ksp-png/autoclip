@@ -92,6 +92,8 @@ def ingest_youtube(
     source_id = new_id()
     target_dir = paths.source_media_dir(source_id)
     target_dir.mkdir(parents=True, exist_ok=True)
+    download_temp_dir = paths.temp_dir()
+    download_temp_dir.mkdir(parents=True, exist_ok=True)
 
     def hook(status: dict) -> None:
         if not on_progress or status.get("status") != "downloading":
@@ -104,6 +106,7 @@ def ingest_youtube(
     options: dict = {
         "format": settings.ytdlp_format,
         "outtmpl": str(target_dir / "source.%(ext)s"),
+        "paths": {"home": str(target_dir), "temp": str(download_temp_dir)},
         "merge_output_format": "mp4",
         "quiet": True,
         "no_warnings": True,
@@ -135,7 +138,11 @@ def ingest_youtube(
         shutil.rmtree(target_dir, ignore_errors=True)
         raise IngestError("yt-dlp reported success but produced no media file.")
 
-    info = _probe_and_validate(downloaded)
+    try:
+        info = _probe_and_validate(downloaded)
+    except Exception:
+        shutil.rmtree(target_dir, ignore_errors=True)
+        raise
 
     return Source(
         id=source_id,
