@@ -15,6 +15,7 @@ import pytest
 from autoclip import app as app_module
 from autoclip import config, paths
 from autoclip.api import sources as sources_module
+from autoclip.api import settings as settings_module
 from autoclip.app import create_app
 from autoclip.db import store
 from autoclip.db.models import Clip, Job, Source, new_id
@@ -148,6 +149,65 @@ class TestSettings:
         client.delete("/api/settings/secrets/openai")
 
         assert client.get("/api/settings").json()["keys_present"]["openai"] is False
+
+
+class TestWhisperModelDownload:
+    def test_downloads_only_the_explicitly_selected_model(
+        self, client: TestClient, tmp_path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        calls = []
+        cache_root = tmp_path / "models" / "whisper"
+
+        class FakeWhisperModel:
+            def __init__(self, model_name, **kwargs):
+                calls.append((model_name, kwargs))
+
+        monkeypatch.setattr(settings_module.models, "whisper_models_dir", lambda: cache_root)
+        monkeypatch.setitem(
+            sys.modules, "faster_whisper", types.SimpleNamespace(WhisperModel=FakeWhisperModel)
+        )
+
+        response = client.post("/api/system/models/whisper/base")
+
+        assert response.status_code == 204
+        assert cache_root.is_dir()
+        assert len(calls) == 1
+        assert calls[0][0] == "base"
+        assert calls[0][1]["download_root"] == str(cache_root)
+        assert calls[0][1]["local_files_only"] is False
+        assert calls[0][1]["device"] == "cpu"
+        assert calls[0][1]["compute_type"] == "int8"
+
+    def test_rejects_unapproved_model_without_starting_download(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        def unexpected_import():
+            raise AssertionError("unsupported model must be rejected before download")
+
+        monkeypatch.setitem(sys.modules, "faster_whisper", types.SimpleNamespace(
+            WhisperModel=unexpected_import
+        ))
+
+        response = client.post("/api/system/models/english-only")
+
+        assert response.status_code == 400
+        assert "Unsupported Whisper model" in response.json()["detail"]
+
+    def test_download_failure_is_reported_as_gateway_error(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        class BrokenWhisperModel:
+            def __init__(self, *args, **kwargs):
+                raise OSError("network interrupted")
+
+        monkeypatch.setitem(
+            sys.modules, "faster_whisper", types.SimpleNamespace(WhisperModel=BrokenWhisperModel)
+        )
+
+        response = client.post("/api/system/models/whisper/tiny")
+
+        assert response.status_code == 502
+        assert "network interrupted" in response.json()["detail"]
 
 
 class TestSources:
