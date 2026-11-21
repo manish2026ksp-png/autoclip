@@ -33,9 +33,7 @@ def test_transcription_loads_selected_model_without_network(
     monkeypatch.setattr(
         transcribe_module, "resolve_compute", lambda settings: ("cpu", "int8")
     )
-    monkeypatch.setattr(
-        "autoclip.cuda.ensure_cuda_libraries", lambda: None
-    )
+    monkeypatch.setattr("autoclip.cuda.ensure_cuda_libraries", lambda: None)
     monkeypatch.setitem(
         sys.modules,
         "faster_whisper",
