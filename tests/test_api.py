@@ -14,8 +14,8 @@ from pathlib import Path
 import pytest
 from autoclip import app as app_module
 from autoclip import config, paths
-from autoclip.api import sources as sources_module
 from autoclip.api import settings as settings_module
+from autoclip.api import sources as sources_module
 from autoclip.app import create_app
 from autoclip.db import store
 from autoclip.db.models import Clip, Job, Source, new_id
