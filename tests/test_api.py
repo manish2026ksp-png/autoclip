@@ -184,9 +184,9 @@ class TestWhisperModelDownload:
         def unexpected_import():
             raise AssertionError("unsupported model must be rejected before download")
 
-        monkeypatch.setitem(sys.modules, "faster_whisper", types.SimpleNamespace(
-            WhisperModel=unexpected_import
-        ))
+        monkeypatch.setitem(
+            sys.modules, "faster_whisper", types.SimpleNamespace(WhisperModel=unexpected_import)
+        )
 
         response = client.post("/api/system/models/english-only")
 
