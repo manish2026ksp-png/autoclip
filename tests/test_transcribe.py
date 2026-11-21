@@ -75,3 +75,38 @@ def test_missing_whisper_model_gives_explicit_download_guidance(tmp_path, monkey
         assert "never downloads models automatically" in str(exc)
     else:
         raise AssertionError("missing local model should fail with actionable guidance")
+
+def test_huggingface_local_cache_miss_gives_explicit_download_guidance(tmp_path, monkeypatch) -> None:
+    transcribe_module = importlib.import_module("autoclip.pipeline.transcribe")
+
+    class LocalEntryNotFoundError(Exception):
+        pass
+
+    class MissingCachedSnapshotModel:
+        def __init__(self, model_name, **kwargs):
+            raise LocalEntryNotFoundError(
+                "Cannot find an appropriate cached snapshot folder for the specified "
+                "revision on the local disk and outgoing traffic has been disabled."
+            )
+
+    monkeypatch.setattr(models, "whisper_models_dir", lambda: tmp_path / "models" / "whisper")
+    monkeypatch.setattr(transcribe_module, "resolve_compute", lambda settings: ("cpu", "int8"))
+    monkeypatch.setattr("autoclip.cuda.ensure_cuda_libraries", lambda: None)
+    monkeypatch.setitem(
+        sys.modules,
+        "faster_whisper",
+        types.SimpleNamespace(WhisperModel=MissingCachedSnapshotModel),
+    )
+
+    try:
+        transcribe_module.transcribe(
+            tmp_path / "sample.wav",
+            WhisperSettings(model="tiny", language="hi"),
+        )
+    except transcribe_module.TranscriptionError as exc:
+        assert "not installed in the local cache" in str(exc)
+        assert "explicitly download this model" in str(exc)
+        assert "never downloads models automatically" in str(exc)
+    else:
+        raise AssertionError("missing cached snapshot should give explicit download guidance")
+
