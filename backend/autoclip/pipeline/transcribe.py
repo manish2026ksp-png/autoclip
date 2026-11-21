@@ -71,6 +71,15 @@ def _model_load_error(exc: Exception, device: str, compute_type: str) -> Transcr
             "or set it to one of the supported values."
         )
 
+    if "model" in lowered and (
+        "not found" in lowered or "does not exist" in lowered or "local_files_only" in lowered
+    ):
+        return TranscriptionError(
+            "The selected Whisper model is not installed in the local cache. "
+            "Open Settings and explicitly download this model, then retry. "
+            "Transcription never downloads models automatically."
+        )
+
     if device == "cuda" and ("cudnn" in lowered or "library" in lowered or "dll" in lowered):
         return TranscriptionError(
             f"Could not load Whisper on the GPU: {message}\n\n"
