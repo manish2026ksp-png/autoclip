@@ -10,9 +10,7 @@ from autoclip import models
 from autoclip.config import WhisperSettings
 
 
-def test_transcription_loads_selected_model_without_network(
-    tmp_path, monkeypatch
-) -> None:
+def test_transcription_loads_selected_model_without_network(tmp_path, monkeypatch) -> None:
     transcribe_module = importlib.import_module("autoclip.pipeline.transcribe")
     cache_root = tmp_path / "models" / "whisper"
     calls = []
@@ -23,16 +21,12 @@ def test_transcription_loads_selected_model_without_network(
 
         def transcribe(self, audio, **kwargs):
             word = types.SimpleNamespace(word=" hello", start=0.0, end=0.5)
-            segment = types.SimpleNamespace(
-                text="hello", start=0.0, end=0.5, words=[word]
-            )
+            segment = types.SimpleNamespace(text="hello", start=0.0, end=0.5, words=[word])
             info = types.SimpleNamespace(duration=0.5, language="en")
             return iter([segment]), info
 
     monkeypatch.setattr(models, "whisper_models_dir", lambda: cache_root)
-    monkeypatch.setattr(
-        transcribe_module, "resolve_compute", lambda settings: ("cpu", "int8")
-    )
+    monkeypatch.setattr(transcribe_module, "resolve_compute", lambda settings: ("cpu", "int8"))
     monkeypatch.setattr("autoclip.cuda.ensure_cuda_libraries", lambda: None)
     monkeypatch.setitem(
         sys.modules,
