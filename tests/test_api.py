@@ -7,12 +7,13 @@ migration, event broker binding, and job queue startup are all covered too.
 from __future__ import annotations
 
 import sys
+import types
 from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 from autoclip import app as app_module
-from autoclip import config
+from autoclip import config, paths
 from autoclip.api import sources as sources_module
 from autoclip.app import create_app
 from autoclip.db import store
@@ -207,6 +208,102 @@ class TestSources:
 
         assert len(staging_paths) == 1
         assert not staging_paths[0].exists()
+
+
+    def test_upload_media_is_removed_if_source_record_cannot_be_saved(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        source_id = new_id()
+        source_dir = paths.source_media_dir(source_id)
+        source_dir.mkdir(parents=True)
+        media_path = source_dir / "source.mp4"
+        media_path.write_bytes(b"media")
+        source = Source(id=source_id, type="upload", path=str(media_path), title="Upload")
+
+        def fail_save(*args, **kwargs):
+            raise RuntimeError("database write failed")
+
+        monkeypatch.setattr(sources_module.ingest, "ingest_file", lambda *args, **kwargs: source)
+        monkeypatch.setattr(store, "create_source", fail_save)
+
+        with pytest.raises(RuntimeError, match="database write failed"):
+            client.post(
+                "/api/sources/upload",
+                files={"file": ("sample.mp4", b"video-data", "video/mp4")},
+            )
+
+        assert not source_dir.exists()
+
+    def test_youtube_media_is_removed_if_source_record_cannot_be_saved(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        source_id = new_id()
+        source_dir = paths.source_media_dir(source_id)
+        source_dir.mkdir(parents=True)
+        media_path = source_dir / "source.mp4"
+        media_path.write_bytes(b"media")
+        source = Source(id=source_id, type="youtube", path=str(media_path), title="YouTube")
+
+        def fail_save(*args, **kwargs):
+            raise RuntimeError("database write failed")
+
+        monkeypatch.setattr(sources_module.ingest, "is_youtube_url", lambda url: True)
+        monkeypatch.setattr(sources_module.ingest, "ingest_youtube", lambda *args, **kwargs: source)
+        monkeypatch.setattr(store, "create_source", fail_save)
+
+        with pytest.raises(RuntimeError, match="database write failed"):
+            client.post("/api/sources/youtube", json={"url": "https://youtube.com/watch?v=test"})
+
+        assert not source_dir.exists()
+
+    def test_youtube_media_is_removed_if_media_probe_fails(
+        self, autoclip_home, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from autoclip.pipeline import ingest
+
+        source_dirs: list[Path] = []
+        original_source_media_dir = paths.source_media_dir
+
+        def record_source_dir(source_id: str) -> Path:
+            directory = original_source_media_dir(source_id)
+            source_dirs.append(directory)
+            return directory
+
+        class FakeDownloadError(Exception):
+            pass
+
+        class FakeYoutubeDL:
+            def __init__(self, options):
+                self.options = options
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def extract_info(self, url, download):
+                output = Path(self.options["outtmpl"].replace("%(ext)s", "mp4"))
+                output.write_bytes(b"media")
+                return {"title": "Test video"}
+
+        fake_yt_dlp = types.SimpleNamespace(
+            YoutubeDL=FakeYoutubeDL,
+            utils=types.SimpleNamespace(DownloadError=FakeDownloadError),
+        )
+
+        def fail_probe(path):
+            raise RuntimeError("probe failed")
+
+        monkeypatch.setitem(sys.modules, "yt_dlp", fake_yt_dlp)
+        monkeypatch.setattr(paths, "source_media_dir", record_source_dir)
+        monkeypatch.setattr(ingest.ffmpeg, "probe", fail_probe)
+
+        with pytest.raises(RuntimeError, match="probe failed"):
+            ingest.ingest_youtube("https://youtube.com/watch?v=test")
+
+        assert len(source_dirs) == 1
+        assert not source_dirs[0].exists()
 
 
 class TestJobs:
